@@ -375,7 +375,7 @@ base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S
 # Add newly constructed chrHLA as a new chromosome to personalized FASTA
 fasta_personalized[["chrHLA HLA"]] <- Biostrings::DNAString(x = chr_HLA)
 # Write personalized GRCh38 genome FASTA file
-Biostrings::writeXStringSet(x = fasta_personalized, filepath = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.fa.gz"), format = "fasta", compress = TRUE)
+Biostrings::writeXStringSet(x = fasta_personalized, filepath = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.fa"), format = "fasta", compress = FALSE)
 
 # Add any missing GTF columns to HLA annotations
 gtf_HLA[base::colnames(gtf_filtered)[!base::colnames(gtf_filtered) %in% base::colnames(gtf_HLA)]] <- NA
@@ -383,8 +383,6 @@ gtf_HLA[base::colnames(gtf_filtered)[!base::colnames(gtf_filtered) %in% base::co
 gtf_filtered <- base::rbind(gtf_filtered, gtf_HLA)
 # Write personalized GTF file
 rtracklayer::export(object = gtf, con = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"), format = "gtf")
-# Compress the personalized GTF file
-R.utils::gzip(filename = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"))
 
 
 ####################################################################################################
