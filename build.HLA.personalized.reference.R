@@ -29,6 +29,7 @@ base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S
 
 # Create directory to store Gencode reference files within the output directory
 gencode_dir <- "Gencode"
+print(glue::glue("{output_dir}/{gencode_dir}"))
 base::dir.create(path = glue::glue("{output_dir}/{gencode_dir}"))
 
 # Create directory to store IPD-IMGT/HLA database file within the output directory
