@@ -125,7 +125,7 @@ gtf_filtered <- gtf_filtered |>
 ####################################################################################################
 
 # Print status message
-base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Building chrHLA by concatenating IPD-IMGT/HLA allele sequences and creating gene/transcript/exon/CDS annotations..."))
+base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Building chrHLA by concatenating IPD-IMGT/HLA allele sequences and and writing a corresponding GTF annotation file..."))
 
 # Extract HLA database version from metadata in allele list file
 hla_db_version <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"))
@@ -235,6 +235,9 @@ for(gene in base::names(hla_genotype)){
     UTR_annotations <- base::sub(pattern = "^FT +UTR +([0-9\\.]+)$", replacement = "\\1", x = UTR_annotation_lines)
     UTR_annotations <- base::sapply(X = UTR_annotations, FUN = function(UTR) base::as.numeric(base::strsplit(x = UTR, split = "..", fixed = TRUE)[[1]]), simplify = FALSE)
     base::names(UTR_annotations) <- base::rep(x = "UTR", base::length(UTR_annotations))
+    # Extract the offset at which the first complete codon of a coding feature can be found
+    codon_start_line <- base::grep(pattern = "codon_start", x = record, value = TRUE)
+    codon_start <- base::as.numeric(base::sub(pattern = "^FT +/codon_start=(\\d{1,})$", replacement = "\\1", x = codon_start_line))
     # Build gene-level GTF entry
     gene_row <- base::data.frame(seqnames = "chrHLA", 
                                  start = base::min(base::as.numeric(base::unlist(UTR_annotations))), 
@@ -381,7 +384,7 @@ gtf_filtered <- base::rbind(gtf_filtered, gtf_HLA)
 # Write personalized GTF file
 rtracklayer::export(object = gtf, con = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"), format = "gtf")
 # Compress the personalized GTF file
-R.utils::compressFile(filename = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"), destname = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf.gz"), remove = TRUE)
+R.utils::gzip(filename = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"))
 
 
 ####################################################################################################
