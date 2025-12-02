@@ -125,7 +125,7 @@ gtf_filtered <- gtf_filtered |>
 ####################################################################################################
 
 # Print status message
-base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Building chrHLA by concatenating IPD-IMGT/HLA allele sequences and and writing a corresponding GTF annotation file..."))
+base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Building chrHLA by concatenating IPD-IMGT/HLA allele sequences and writing its feature annotations, while masking the original HLA regions on chr6 and removing their annotations..."))
 
 # Extract HLA database version from metadata in allele list file
 hla_db_version <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"))
@@ -392,7 +392,7 @@ R.utils::gzip(filename = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primar
 ####################################################################################################
 
 # Print status message
-base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Removing temporary Gencode and IPD-IMGT/HLA directories. Persoanlized reference build complete."))
+base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Removing temporary Gencode and IPD-IMGT/HLA directories. Personalized reference build complete."))
 
 # Delete source directories and all their contents used for downloading and processing Gencode and IPD-IMGT/HLA data files (this only keeps the final personalized FASTA and GTF outputs)
 base::unlink(x = glue::glue("{output_dir}/{gencode_dir}"), recursive = TRUE, force = TRUE)
