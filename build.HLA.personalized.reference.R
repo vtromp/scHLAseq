@@ -13,8 +13,8 @@ opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 if(base::is.null(opt$genotype)){stop("Error: You must provide a genotype file using -g or --genotype.")}
 
 # Assign parsed arguments to internal variables for use in the script
-genotype_file <- opt$genotype
-output_dir    <- opt$output_dir
+genotype_file <- opt$`genotype`
+output_dir    <- opt$`output-dir`
 
 # Remove trailing slash if present
 output_dir <- base::sub(pattern = "/$", replacement = "", x = output_dir)
@@ -29,7 +29,6 @@ base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S
 
 # Create directory to store Gencode reference files within the output directory
 gencode_dir <- "Gencode"
-print(glue::glue("{output_dir}/{gencode_dir}"))
 base::dir.create(path = glue::glue("{output_dir}/{gencode_dir}"))
 
 # Create directory to store IPD-IMGT/HLA database file within the output directory
