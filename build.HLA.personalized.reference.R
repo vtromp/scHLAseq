@@ -7,7 +7,7 @@ option_list <- list(
 )
 
 # Parse command-line arguments based on the defined options
-opt <- optparse::parse_args(optparse::OptionParser(option_list = optio))
+opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 
 # Validate that the path to the genotype file was provided
 if(base::is.null(opt$genotype)){stop("Error: You must provide a genotype file using -g or --genotype.")}
