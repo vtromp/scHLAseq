@@ -8,7 +8,6 @@ option_list <- list(
 
 # Parse command-line arguments based on the defined options
 opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
-print(opt)
 
 # Validate that the path to the genotype file was provided
 if(base::is.null(opt$genotype)){stop("Error: You must provide a genotype file using -g or --genotype.")}
@@ -16,6 +15,9 @@ if(base::is.null(opt$genotype)){stop("Error: You must provide a genotype file us
 # Assign parsed arguments to internal variables for use in the script
 genotype_file <- opt$genotype
 output_dir    <- opt$output_dir
+
+# Remove trailing slash if present
+output_dir <- base::sub(pattern = "/$", replacement = "", x = output_dir)
 
 
 ####################################################################################################
