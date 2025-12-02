@@ -128,7 +128,7 @@ gtf_filtered <- gtf_filtered |>
 base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Building chrHLA by concatenating IPD-IMGT/HLA allele sequences and creating gene/transcript/exon/CDS annotations..."))
 
 # Extract HLA database version from metadata in allele list file
-hla_db_version <- base::readLines(con = glue::glue("{IPD_IMGT_HLA_dir}/allelelist.txt"))
+hla_db_version <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"))
 hla_db_version <- base::grep(pattern = "version:", x = hla_db_version, value = TRUE)
 hla_db_version <- base::sub(pattern = "^# version: ", replacement = "", hla_db_version)
 
