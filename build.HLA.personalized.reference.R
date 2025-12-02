@@ -136,7 +136,7 @@ hla_db_version <- base::sub(pattern = "^# version: ", replacement = "", hla_db_v
 hla_genotype <- jsonlite::fromJSON(genotype_file)
 
 # Load the full IPD-IMGT/HLA database as raw text
-hla_db <- base::readLines(con = glue::glue("{IPD_IMGT_HLA_dir}/hla.dat"))
+hla_db <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/hla.dat"))
 
 # Split the HLA database into individual allele records
 starts <- base::c(1, base::which(hla_db == "//") + 1)
@@ -153,7 +153,7 @@ accession_numbers <- base::unlist(base::sapply(X = hla_db, FUN = function(record
 base::names(hla_db) <- accession_numbers
 
 # Read allele list file and rename columns
-allele_list <- read.csv(file = glue::glue("{IPD_IMGT_HLA_dir}/allelelist.txt"), header = TRUE, comment.char = "#")
+allele_list <- read.csv(file = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"), header = TRUE, comment.char = "#")
 base::colnames(allele_list) <- base::c("allele.id", "allele.name")
 
 # Subset HLA database to retain only alleles present in the current allele list
@@ -392,5 +392,5 @@ R.utils::compressFile(filename = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dn
 base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Removing temporary Gencode and IPD-IMGT/HLA directories. Persoanlized reference build complete."))
 
 # Delete source directories and all their contents used for downloading and processing Gencode and IPD-IMGT/HLA data files (this only keeps the final personalized FASTA and GTF outputs)
-base::unlink(x = gencode_dir, recursive = TRUE, force = TRUE)
-base::unlink(x = IPD_IMGT_HLA_dir, recursive = TRUE, force = TRUE)
+base::unlink(x = glue::glue("{output_dir}/{gencode_dir}"), recursive = TRUE, force = TRUE)
+base::unlink(x = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}"), recursive = TRUE, force = TRUE)
