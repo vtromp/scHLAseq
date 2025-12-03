@@ -191,6 +191,7 @@ base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S
 hla_db_version <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"))
 hla_db_version <- base::grep(pattern = "version:", x = hla_db_version, value = TRUE)
 hla_db_version <- base::sub(pattern = "^# version: ", replacement = "", hla_db_version)
+hla_db_version <- base::sub(pattern = " ", replacement = "_", hla_db_version)
 
 # Load the full IPD-IMGT/HLA database as raw text
 hla_db <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/hla.dat"))
