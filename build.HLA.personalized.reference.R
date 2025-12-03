@@ -109,19 +109,79 @@ allowed_gene_ids <- gtf |>
   dplyr::filter(!base::grepl(pattern = "readthrough_transcript", tag)) |>
   dplyr::pull(gene_id) |>
   base::unique()
-# Extract gene IDs of all HLA genes ('gene_name' starts with 'HLA-')
-hla_gene_ids <- base::unique(gtf[base::grepl(pattern = "^HLA-", gtf$gene_name), "gene_id"])
-# Combine the main allowed gene set with HLA genes and deduplicate
-allowed_gene_ids <- base::sort(base::unique(base::c(allowed_gene_ids, hla_gene_ids)))
 # Subset the GTF annotation data frame to retain only entries belonging to the allowed genes
 gtf_filtered <- gtf[gtf$gene_id %in% allowed_gene_ids, ]
 # Filter chrY annotations: exclude all PAR-Y genes (including XGY2, ENSG00000290840), but retain SRY and ENSG00000286130, which lie within intronic or overlapping regions of XGY2/RPS4Y1
 gtf_filtered <- gtf_filtered |>
   dplyr::filter(seqnames != "chrY" | (seqnames == "chrY" & start >= 2752083 & start < 56887903 & gene_id != "ENSG00000290840"))
 
+# Extract gene IDs of all HLA genes ('gene_name' starts with 'HLA-')
+hla_gene_ids <- base::unique(gtf[base::grepl(pattern = "^HLA-", gtf$gene_name), "gene_id"])
+# Extract gene IDs of all HLA pseudogenes ('gene_type' contains 'pseudogene')
+hla_pseudogene_ids <- base::unique(gtf[gtf$gene_id %in% hla_gene_ids & base::grepl(pattern = "pseudogene", x = gtf$gene_type), "gene_id"])
+# Identify HLA pseudogenes that do NOT overlap any retained (filtered) gene
+non_overlapping_hla_pseudogene_ids <- hla_pseudogene_ids[base::sapply(X = hla_pseudogene_ids, FUN = function(pseudogene_id){
+  # Get the pseudogene genomic interval
+  seqname <- base::unique(gtf[gtf$gene_id == pseudogene_id, "seqnames"])
+  start <- base::min(gtf[gtf$gene_id == pseudogene_id, "start"])
+  end <- base::max(gtf[gtf$gene_id == pseudogene_id, "end"])
+  # Check for any overlapping genes in the filtered GTF data frame
+  overlapping_genes <- base::unique(gtf_filtered[gtf_filtered$seqnames == seqname & ((gtf_filtered$start <= start & gtf_filtered$end > start) | (gtf_filtered$start < end & gtf_filtered$end >= end)), "gene_id"])
+  # Retain only pseudogenes that DO NOT overlap any allowed gene
+  if(base::length(overlapping_genes) > 0)(base::return(FALSE))else{base::return(TRUE)}
+})]
+
+# Add the non-overlapping HLA pseudogenes back into the filtered GTF
+gtf_filtered <- gtf[gtf$gene_id %in% base::c(gtf_filtered$gene_id, non_overlapping_hla_pseudogene_ids), ]
+
 
 ####################################################################################################
-# 4. Import HLA database, parse allele sequences, and build personalized chrHLA
+# 4. Process HLA genotype JSON file and infer expected DRB paralog configuration
+####################################################################################################
+
+# Print status message
+base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Reading HLA genotype JSON file and inferring expected DRB paralog configuration..."))
+
+# Read HLA genotype JSON input file
+hla_genotype <- jsonlite::fromJSON(genotype_file)
+
+# Extract the DRB1 allele calls from the genotype object
+DRB1_alleles <- hla_genotype[["DRB1"]]
+# Extract the 2-digit serological group
+allele_groups <- base::sapply(X = DRB1_alleles, FUN = function(allele){base::sub(pattern = "DRB1\\*(\\d{2}):.*$", replacement = "\\1", x = allele)})
+
+# Define the mapping from DRB1 allele groups to their expected paralog configuration, following known DRB locus haplotype architectures
+group_dictionary <- base::list(`01` = base::c("DRB1", "DRB6", "DRB9"),
+                               `03` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
+                               `04` = base::c("DRB1", "DRB4", "DRB7", "DRB8", "DRB9"),
+                               `07` = base::c("DRB1", "DRB4", "DRB7", "DRB8", "DRB9"),
+                               `08` = base::c("DRB1", "DRB9"),
+                               `09` = base::c("DRB1", "DRB4", "DRB7", "DRB8", "DRB9"),
+                               `10` = base::c("DRB1", "DRB6", "DRB9"),
+                               `11` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
+                               `12` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
+                               `13` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
+                               `14` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
+                               `15` = base::c("DRB1", "DRB5", "DRB6", "DRB9"),
+                               `16` = base::c("DRB1", "DRB5", "DRB6", "DRB9"))
+
+# Define canonical alleles to select when genotype data is incomplete
+reference_alleles <- base::list(DRB3 = "DRB3:01:01:02",
+                                DRB4 = "DRB4:01:01:01")
+
+# Determine the full set of DRB loci expected for the individual, based on the allele group–derived haplotype configurations
+DRB_genes <- base::unique(base::unlist(group_dictionary[allele_groups]))
+
+# Identify DRB genes that are expected but missing from the genotype call set and absent in the filtered GTF annotation data frame (to avoid adding genes not annotated)
+DRB_genes_missing <- DRB_genes[!DRB_genes %in% base::names(hla_genotype) & !base::paste0("HLA-", DRB_genes) %in% gtf_filtered$gene_name]
+
+# If DRB3 or DRB4 is expected but missing, impute using the reference alleles defined above
+if("DRB3" %in% DRB_genes_missing){hla_genotype[["DRB3"]] <- reference_alleles[["DRB3"]]}
+if("DRB4" %in% DRB_genes_missing){hla_genotype[["DRB4"]] <- reference_alleles[["DRB4"]]}
+
+
+####################################################################################################
+# 5. Import HLA database, parse allele sequences, and build personalized chrHLA
 ####################################################################################################
 
 # Print status message
@@ -131,9 +191,6 @@ base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S
 hla_db_version <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/allelelist.txt"))
 hla_db_version <- base::grep(pattern = "version:", x = hla_db_version, value = TRUE)
 hla_db_version <- base::sub(pattern = "^# version: ", replacement = "", hla_db_version)
-
-# Read HLA genotype JSON input file
-hla_genotype <- jsonlite::fromJSON(genotype_file)
 
 # Load the full IPD-IMGT/HLA database as raw text
 hla_db <- base::readLines(con = glue::glue("{output_dir}/{IPD_IMGT_HLA_dir}/hla.dat"))
@@ -149,7 +206,7 @@ accession_numbers <- base::unlist(base::sapply(X = hla_db, FUN = function(record
   an <- base::sub(pattern = "(^AC +)(HLA\\d{5})(;$)", replacement = "\\2", x = an)
   return(an)
 }))
-# Assign accession numbers as list names
+# Assign accession numbers as names of the records
 base::names(hla_db) <- accession_numbers
 
 # Read allele list file and rename columns
@@ -366,7 +423,7 @@ for(gene in base::names(hla_genotype)){
 
 
 ####################################################################################################
-# 5. Write personalized reference FASTA and GTF file
+# 6. Write personalized reference FASTA and GTF file
 ####################################################################################################
 
 # Print status message
@@ -380,13 +437,13 @@ Biostrings::writeXStringSet(x = fasta_personalized, filepath = glue::glue("{outp
 # Add any missing GTF columns to HLA annotations
 gtf_HLA[base::colnames(gtf_filtered)[!base::colnames(gtf_filtered) %in% base::colnames(gtf_HLA)]] <- NA
 # Combine GRCh38 filtered GTF with chrHLA GTF entries
-gtf_filtered <- base::rbind(gtf_filtered, gtf_HLA)
+gtf_personalized <- base::rbind(gtf_filtered, gtf_HLA)
 # Write personalized GTF file
-rtracklayer::export(object = gtf, con = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"), format = "gtf")
+rtracklayer::export(object = gtf_personalized, con = glue::glue("{output_dir}/Homo_sapiens.GRCh38.dna.primary_assembly.personalized.gtf"), format = "gtf")
 
 
 ####################################################################################################
-# 6. Finish and cleanup source directories
+# 7. Finish and cleanup source directories
 ####################################################################################################
 
 # Print status message
