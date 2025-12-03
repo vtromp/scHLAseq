@@ -136,11 +136,11 @@ gtf_filtered <- gtf[gtf$gene_id %in% base::c(gtf_filtered$gene_id, non_overlappi
 
 
 ####################################################################################################
-# 4. Process HLA genotype JSON file and infer expected DRB paralog configuration
+# 4. Process HLA genotype JSON file and infer expected DRB configuration
 ####################################################################################################
 
 # Print status message
-base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Reading HLA genotype JSON file and inferring expected DRB paralog configuration..."))
+base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Reading HLA genotype JSON file and inferring expected DRB paralog and pseudogene configuration..."))
 
 # Read HLA genotype JSON input file
 hla_genotype <- jsonlite::fromJSON(genotype_file)
@@ -228,7 +228,7 @@ chr_HLA <- ""
 # Create a working copy of the reference FASTA to be personalized
 fasta_personalized <- fasta
 # Initialize empty GTF structure to store coordinates for all inserted HLA alleles
-gtf_HLA <- base::data.frame(seqnames = base::character(0), start = base::numeric(0), end = base::numeric(0), width = base::numeric(0), strand = base::character(0), 
+gtf_HLA <- base::data.frame(seqnames = base::character(0), start = base::numeric(0), end = base::numeric(0), width = base::numeric(0), strand = base::character(0), phase = base::numeric(0), 
                             source = base::character(0), type = base::character(0),
                             gene_id = base::character(0), gene_type = base::character(0), gene_name = base::character(0), 
                             transcript_id = base::character(0), transcript_type = base::character(0), transcript_name = base::character(0),
@@ -301,6 +301,7 @@ for(gene in base::names(hla_genotype)){
                                  end = base::max(base::as.numeric(base::unlist(UTR_annotations))), 
                                  width = NA, 
                                  strand = "+",
+                                 phase = NA,
                                  source = hla_db_version, 
                                  type = "gene",
                                  gene_id = allele_id, 
@@ -317,6 +318,7 @@ for(gene in base::names(hla_genotype)){
                                        end = base::max(base::as.numeric(base::unlist(UTR_annotations))), 
                                        width = NA, 
                                        strand = "+",
+                                       phase = NA,
                                        source = hla_db_version, 
                                        type = "transcript",
                                        gene_id = allele_id, 
@@ -333,6 +335,7 @@ for(gene in base::names(hla_genotype)){
                                  end = base::sapply(X = CDS_annotations, FUN = function(CDS) CDS[2]), 
                                  width = NA, 
                                  strand = "+",
+                                 phase = base::c(0, base::sapply(2:base::length(CDS_annotations), function(x){(CDS_annotations[[x-1]][2] - CDS_annotations[[1]][1] + 1) %% 3})),
                                  source = hla_db_version, 
                                  type = "CDS",
                                  gene_id = allele_id, 
@@ -349,6 +352,7 @@ for(gene in base::names(hla_genotype)){
                                   end = base::sapply(X = exon_annotations, FUN = function(exon) exon[2]), 
                                   width = NA, 
                                   strand = "+",
+                                  phase = NA,
                                   source = hla_db_version, 
                                   type = "exon",
                                   gene_id = allele_id, 
@@ -365,6 +369,7 @@ for(gene in base::names(hla_genotype)){
                                         end = CDS_annotations[[1]][1] + 2, 
                                         width = NA, 
                                         strand = "+",
+                                        phase = 0,
                                         source = hla_db_version, 
                                         type = "start_codon",
                                         gene_id = allele_id, 
@@ -380,6 +385,7 @@ for(gene in base::names(hla_genotype)){
                                        end = CDS_annotations[[base::length(CDS_annotations)]][2], 
                                        width = NA, 
                                        strand = "+",
+                                       phase = 0,
                                        source = hla_db_version, 
                                        type = "stop_codon",
                                        gene_id = allele_id, 
@@ -396,6 +402,7 @@ for(gene in base::names(hla_genotype)){
                                  end = base::sapply(X = UTR_annotations, FUN = function(UTR) UTR[2]), 
                                  width = NA, 
                                  strand = "+",
+                                 phase = 0,
                                  source = hla_db_version, 
                                  type = "UTR",
                                  gene_id = allele_id, 
