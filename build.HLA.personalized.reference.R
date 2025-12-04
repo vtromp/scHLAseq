@@ -48,8 +48,8 @@ release <- "44"
 base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Downloading Gencode GRCh38 (release 44) genome FASTA and GTF files, and the IPD-IMGT/HLA database file..."))
 
 # Construct URLs for downloading Gencode FASTA genome file, GTF annotation file, and IPD-IMGT/HLA database file
-fasta_url <- glue::glue("http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/GRCh38.primary_assembly.genome.fa.gz")
-gtf_url <- glue::glue("http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/gencode.v{release}.primary_assembly.annotation.gtf.gz")
+fasta_url <- glue::glue("https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/GRCh38.primary_assembly.genome.fa.gz")
+gtf_url <- glue::glue("https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/gencode.v{release}.primary_assembly.annotation.gtf.gz")
 hla_db_url <- "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/hla.dat.zip"
 hla_alleles_url <- "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Allelelist.txt"
 
@@ -148,7 +148,7 @@ hla_genotype <- jsonlite::fromJSON(genotype_file)
 # Extract the DRB1 allele calls from the genotype object
 DRB1_alleles <- hla_genotype[["DRB1"]]
 # Extract the 2-digit serological group
-allele_groups <- base::sapply(X = DRB1_alleles, FUN = function(allele){base::sub(pattern = "DRB1\\*(\\d{2}):.*$", replacement = "\\1", x = allele)})
+allele_groups <- base::unique(base::sapply(X = DRB1_alleles, FUN = function(allele){base::sub(pattern = "DRB1\\*(\\d{2}):.*$", replacement = "\\1", x = allele)}))
 
 # Define the mapping from DRB1 allele groups to their expected paralog configuration, following known DRB locus haplotype architectures
 group_dictionary <- base::list(`01` = base::c("DRB1", "DRB6", "DRB9"),
@@ -178,6 +178,11 @@ DRB_genes_missing <- DRB_genes[!DRB_genes %in% base::names(hla_genotype) & !base
 # If DRB3 or DRB4 is expected but missing, impute using the reference alleles defined above
 if("DRB3" %in% DRB_genes_missing){hla_genotype[["DRB3"]] <- reference_alleles[["DRB3"]]}
 if("DRB4" %in% DRB_genes_missing){hla_genotype[["DRB4"]] <- reference_alleles[["DRB4"]]}
+
+# Identify DRB genes that are not part of the inferred haplotype configuration and should therefore be removed from the GTF annotation
+DRB_genes_absent <- base::c("DRB1", "DRB2", "DRB3", "DRB4", "DRB5", "DRB6", "DRB7", "DRB8", "DRB9")[!base::c("DRB1", "DRB2", "DRB3", "DRB4", "DRB5", "DRB6", "DRB7", "DRB8", "DRB9") %in% DRB_genes]
+# Filter out annotation entries corresponding to DRB genes not present in this inferred configuration
+gtf_filtered <- gtf_filtered[base::grepl(pattern = base::paste0(base::paste0("HLA-", DRB_genes_absent), collapse = "|"), x = gtf_filtered$gene_name), ]
 
 
 ####################################################################################################
