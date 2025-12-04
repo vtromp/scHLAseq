@@ -182,7 +182,7 @@ if("DRB4" %in% DRB_genes_missing){hla_genotype[["DRB4"]] <- reference_alleles[["
 # Identify DRB genes that are not part of the inferred haplotype configuration and should therefore be removed from the GTF annotation
 DRB_genes_absent <- base::c("DRB1", "DRB2", "DRB3", "DRB4", "DRB5", "DRB6", "DRB7", "DRB8", "DRB9")[!base::c("DRB1", "DRB2", "DRB3", "DRB4", "DRB5", "DRB6", "DRB7", "DRB8", "DRB9") %in% DRB_genes]
 # Filter out annotation entries corresponding to DRB genes not present in this inferred configuration
-gtf_filtered <- gtf_filtered[base::grepl(pattern = base::paste0(base::paste0("HLA-", DRB_genes_absent), collapse = "|"), x = gtf_filtered$gene_name), ]
+gtf_filtered <- gtf_filtered[!gtf_filtered$gene_name %in% base::grep(pattern = base::paste0(base::paste0("HLA-", DRB_genes_absent), collapse = "|"), x = gtf_filtered$gene_name, value = TRUE), ]
 
 
 ####################################################################################################
