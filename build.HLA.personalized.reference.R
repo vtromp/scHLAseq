@@ -175,7 +175,7 @@ canonical_reference_alleles <- base::list(DPA1 = "DPA1*01:03:01",
 missing_HLAclassII_genes <- all_HLAclassII_genes[!all_HLAclassII_genes %in% base::names(hla_genotype)]
 
 # For HLA class II genes that are expected based on haplotype inference but missing from the genotype call set, add a fallback allele using the predefined canonical reference allele (when available) to ensure complete locus representation
-for(gene in missing_HLAclassII_genes){if(gene %in% base::names(canonical_reference_alleles)){hla_genotype[[gene]] <- reference_alleles[[gene]]}}
+for(gene in missing_HLAclassII_genes){if(gene %in% base::names(canonical_reference_alleles)){hla_genotype[[gene]] <- canonical_reference_alleles[[gene]]}}
 
 
 ####################################################################################################
