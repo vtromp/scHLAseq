@@ -41,15 +41,15 @@ release <- "44"
 
 
 ####################################################################################################
-# 2. Download Genome Reference Consortium Human Build 38 (GRCH38), and IPD-IMGT/HLA database
+# 2. Download FASTA and GTF file of primary assembly from Genome Reference Consortium Human Build 38 (GRCH38), and download the IPD-IMGT/HLA database file
 ####################################################################################################
 
 # Print status message
 base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Downloading Gencode GRCh38 (release 44) genome FASTA and GTF files, and the IPD-IMGT/HLA database file..."))
 
 # Construct URLs for downloading Gencode FASTA genome file, GTF annotation file, and IPD-IMGT/HLA database file
-fasta_url <- glue::glue("http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/GRCh38.primary_assembly.genome.fa.gz")
-gtf_url <- glue::glue("http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/gencode.v{release}.primary_assembly.annotation.gtf.gz")
+fasta_url <- glue::glue("https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/GRCh38.primary_assembly.genome.fa.gz")
+gtf_url <- glue::glue("https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_{release}/gencode.v{release}.primary_assembly.annotation.gtf.gz")
 hla_db_url <- "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/hla.dat.zip"
 hla_alleles_url <- "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Allelelist.txt"
 
@@ -115,42 +115,26 @@ gtf_filtered <- gtf[gtf$gene_id %in% allowed_gene_ids, ]
 gtf_filtered <- gtf_filtered |>
   dplyr::filter(seqnames != "chrY" | (seqnames == "chrY" & start >= 2752083 & start < 56887903 & gene_id != "ENSG00000290840"))
 
-# Extract gene IDs of all HLA genes ('gene_name' starts with 'HLA-')
-hla_gene_ids <- base::unique(gtf[base::grepl(pattern = "^HLA-", gtf$gene_name), "gene_id"])
-# Extract gene IDs of all HLA pseudogenes ('gene_type' contains 'pseudogene')
-hla_pseudogene_ids <- base::unique(gtf[gtf$gene_id %in% hla_gene_ids & base::grepl(pattern = "pseudogene", x = gtf$gene_type), "gene_id"])
-# Identify HLA pseudogenes that do NOT overlap any retained (filtered) gene
-non_overlapping_hla_pseudogene_ids <- hla_pseudogene_ids[base::sapply(X = hla_pseudogene_ids, FUN = function(pseudogene_id){
-  # Get the pseudogene genomic interval
-  seqname <- base::unique(gtf[gtf$gene_id == pseudogene_id, "seqnames"])
-  start <- base::min(gtf[gtf$gene_id == pseudogene_id, "start"])
-  end <- base::max(gtf[gtf$gene_id == pseudogene_id, "end"])
-  # Check for any overlapping genes in the filtered GTF data frame
-  overlapping_genes <- base::unique(gtf_filtered[gtf_filtered$seqnames == seqname & ((gtf_filtered$start <= start & gtf_filtered$end > start) | (gtf_filtered$start < end & gtf_filtered$end >= end)), "gene_id"])
-  # Retain only pseudogenes that DO NOT overlap any allowed gene
-  if(base::length(overlapping_genes) > 0)(base::return(FALSE))else{base::return(TRUE)}
-})]
-
-# Add the non-overlapping HLA pseudogenes back into the filtered GTF
-gtf_filtered <- gtf[gtf$gene_id %in% base::c(gtf_filtered$gene_id, non_overlapping_hla_pseudogene_ids), ]
-
 
 ####################################################################################################
-# 4. Process HLA genotype JSON file and infer expected DRB configuration
+# 4. Process HLA genotype JSON file and infer expected locus configuration
 ####################################################################################################
 
 # Print status message
 base::message(base::paste0(base::format(x = base::Sys.time(), "%Y-%m-%d %H:%M:%S "), "Reading HLA genotype JSON file and inferring expected DRB paralog and pseudogene configuration..."))
 
-# Read HLA genotype JSON input file
+# Read HLA genotype JSON input file produced by arcasHLA
 hla_genotype <- jsonlite::fromJSON(genotype_file)
 
-# Extract the DRB1 allele calls from the genotype object
-DRB1_alleles <- hla_genotype[["DRB1"]]
-# Extract the 2-digit serological group
-allele_groups <- base::sapply(X = DRB1_alleles, FUN = function(allele){base::sub(pattern = "DRB1\\*(\\d{2}):.*$", replacement = "\\1", x = allele)})
+# Restrict genotype object to HLA class II loci (DP, DQ, DR)
+hla_genotype <- hla_genotype[base::grepl(pattern = "^DP|^DQ|^DR", x = base::names(hla_genotype))]
 
-# Define the mapping from DRB1 allele groups to their expected paralog configuration, following known DRB locus haplotype architectures
+# Extract the DRB1 allele calls from the genotype object (key determinants of DRB haplotype structure)
+DRB1_alleles <- hla_genotype[["DRB1"]]
+# Extract the 2-digit serological group from the allele names
+allele_groups <- base::unique(base::sapply(X = DRB1_alleles, FUN = function(allele){base::sub(pattern = "DRB1\\*(\\d{2}):.*$", replacement = "\\1", x = allele)}))
+
+# Define expected DRB paralog and pseudogene composition for each DRB1 allele group, based on known HLA-DR haplotype architectures
 group_dictionary <- base::list(`01` = base::c("DRB1", "DRB6", "DRB9"),
                                `03` = base::c("DRB1", "DRB2", "DRB3", "DRB9"),
                                `04` = base::c("DRB1", "DRB4", "DRB7", "DRB8", "DRB9"),
@@ -165,19 +149,33 @@ group_dictionary <- base::list(`01` = base::c("DRB1", "DRB6", "DRB9"),
                                `15` = base::c("DRB1", "DRB5", "DRB6", "DRB9"),
                                `16` = base::c("DRB1", "DRB5", "DRB6", "DRB9"))
 
-# Define canonical alleles to select when genotype data is incomplete
-reference_alleles <- base::list(DRB3 = "DRB3:01:01:02",
-                                DRB4 = "DRB4:01:01:01")
-
-# Determine the full set of DRB loci expected for the individual, based on the allele group–derived haplotype configurations
+# Infer the complete set of DRB genes expected for the individual by combining haplotype configurations from all observed DRB1 allele groups
 DRB_genes <- base::unique(base::unlist(group_dictionary[allele_groups]))
 
-# Identify DRB genes that are expected but missing from the genotype call set and absent in the filtered GTF annotation data frame (to avoid adding genes not annotated)
-DRB_genes_missing <- DRB_genes[!DRB_genes %in% base::names(hla_genotype) & !base::paste0("HLA-", DRB_genes) %in% gtf_filtered$gene_name]
+# Define the full expected set of HLA class II genes, including DP, DQ, DR, with DRB paralogs inferred from DRB1 haplotype structure
+all_HLAclassII_genes <- base::c("DPA1", "DPA2", "DPB1", "DPB2", "DQA1", "DQA2", "DQB1", "DQB2", "DRA", DRB_genes)
 
-# If DRB3 or DRB4 is expected but missing, impute using the reference alleles defined above
-if("DRB3" %in% DRB_genes_missing){hla_genotype[["DRB3"]] <- reference_alleles[["DRB3"]]}
-if("DRB4" %in% DRB_genes_missing){hla_genotype[["DRB4"]] <- reference_alleles[["DRB4"]]}
+# Define canonical reference alleles to use when genotype calls are missing by selecting, for each locus, the first allele in the IPD-IMGT/HLA database with a complete genomic sequence
+# NOTE: No full genomic sequences were available for DRB2, DRB6, DRB7, DRB8, or DRB9, and these loci are therefore excluded from this selection
+canonical_reference_alleles <- base::list(DPA1 = "DPA1*01:03:01",
+                                          DPA2 = "DPA2*01:01:01",
+                                          DPB1 = "DPB1*01:01:01",
+                                          DPB2 = "DPB2*01:01:01",
+                                          DQA1 = "DQA1*01:01:01",
+                                          DQA2 = "DQA2*01:01:01",
+                                          DQB1 = "DQB1*02:01:01",
+                                          DQB2 = "DQB2*01:01:01",
+                                          DRA = "DRA*01:01:01",
+                                          DRB1 = "DRB1*01:01:01",
+                                          DRB3 = "DRB3*01:01:02",
+                                          DRB4 = "DRB4*01:01:01",
+                                          DRB5 = "DRB5*01:01:01")
+
+# Identify HLA class II genes expected based on haplotype inference but missing from the genotype call set
+missing_HLAclassII_genes <- all_HLAclassII_genes[!all_HLAclassII_genes %in% base::names(hla_genotype)]
+
+# For HLA class II genes that are expected based on haplotype inference but missing from the genotype call set, add a fallback allele using the predefined canonical reference allele (when available) to ensure complete locus representation
+for(gene in missing_HLAclassII_genes){if(gene %in% base::names(canonical_reference_alleles)){hla_genotype[[gene]] <- canonical_reference_alleles[[gene]]}}
 
 
 ####################################################################################################
@@ -235,24 +233,30 @@ gtf_HLA <- base::data.frame(seqnames = base::character(0), start = base::numeric
                             transcript_id = base::character(0), transcript_type = base::character(0), transcript_name = base::character(0),
                             exon_number = base::numeric(0), exon_id = base::character(0))
 
+# Mask HLA class II gene loci in the reference FASTA and remove their annotations from the GTF to remove native HLA class II genes from the reference, allowing them to be reintroduced later as personalized, allele-resolved loci (e.g. on a new chromosome 'chrHLA') without sequence or annotation duplication
+for(gene in base::c("HLA-DPA1", "HLA-DPA2", "HLA-DPB1", "HLA-DPB2",
+                    "HLA-DQA1", "HLA-DQA2", "HLA-DQB1", "HLA-DQB2",
+                    "HLA-DRA", "HLA-DRB1", "HLA-DRB2", "HLA-DRB3", "HLA-DRB4", "HLA-DRB5", "HLA-DRB6", "HLA-DRB7", "HLA-DRB8", "HLA-DRB9")){
+  # Proceed only if the gene is present in the filtered GTF annotation
+  if(gene %in% gtf_filtered$gene_name){
+    # Identify the chromosome/contig containing this HLA gene in the personalized FASTA
+    mask_seqname <- base::grep(pattern = base::unique(gtf_filtered[gtf_filtered$gene_name == gene, "seqnames"]), x = base::names(fasta_personalized), value = TRUE)
+    # Determine the genomic start coordinate of the gene to be masked
+    mask_start <- base::min(gtf_filtered[gtf_filtered$gene_name == gene, "start"])
+    # Determine the genomic end coordinate of the gene to be masked
+    mask_end <- base::max(gtf_filtered[gtf_filtered$gene_name == gene, "end"])
+    # Replace the gene region in the personalized FASTA with Ns to mask the HLA sequence of the default sequence
+    fasta_personalized[[mask_seqname]] <- Biostrings::replaceLetterAt(x = fasta_personalized[[mask_seqname]], at = mask_start:mask_end, letter = base::paste(base::rep(x = "N", mask_end - mask_start + 1), collapse = ""))
+    # Remove the masked gene entries from the filtered GTF annotation
+    gtf_filtered <- gtf_filtered[gtf_filtered$gene_name != gene, ]
+  }
+}
+
 # Running genomic coordinate for placing each allele consecutively in chrHLA
 start_pos <- 0
 
 # Iterate over each HLA gene in the genotype file
 for(gene in base::names(hla_genotype)){
-  # Proceed only if the gene (prefixed with "HLA-") is present in the filtered GTF annotation
-  if(base::paste0("HLA-", gene) %in% gtf_filtered$gene_name){
-    # Identify the chromosome/contig containing this HLA gene in the personalized FASTA
-    mask_seqname <- base::grep(pattern = base::unique(gtf_filtered[gtf_filtered$gene_name == base::paste0("HLA-", gene), "seqnames"]), x = base::names(fasta_personalized), value = TRUE)
-    # Determine the genomic start coordinate of the gene to be masked
-    mask_start <- base::min(gtf_filtered[gtf_filtered$gene_name == base::paste0("HLA-", gene), "start"])
-    # Determine the genomic end coordinate of the gene to be masked
-    mask_end <- base::max(gtf_filtered[gtf_filtered$gene_name == base::paste0("HLA-", gene), "end"])
-    # Replace the gene region in the personalized FASTA with Ns to mask the HLA sequence of the default sequence
-    fasta_personalized[[mask_seqname]] <- Biostrings::replaceLetterAt(x = fasta_personalized[[mask_seqname]], at = mask_start:mask_end, letter = base::paste(base::rep(x = "N", mask_end - mask_start + 1), collapse = ""))
-    # Remove the masked gene entries from the filtered GTF annotation
-    gtf_filtered <- gtf_filtered[gtf_filtered$gene_name != base::paste0("HLA-", gene), ]
-  }
   # Iterate over all unique alleles for this HLA gene
   for(allele in base::unique(hla_genotype[[gene]])){
     # If a full-length sequence is available...
@@ -305,7 +309,7 @@ for(gene in base::names(hla_genotype)){
                                  phase = NA,
                                  source = hla_db_version, 
                                  type = "gene",
-                                 gene_id = allele_id, 
+                                 gene_id = base::paste0("HLA-", gene), 
                                  gene_type = "protein_coding", 
                                  gene_name = base::paste0("HLA-", gene), 
                                  transcript_id = NA, 
@@ -322,7 +326,7 @@ for(gene in base::names(hla_genotype)){
                                        phase = NA,
                                        source = hla_db_version, 
                                        type = "transcript",
-                                       gene_id = allele_id, 
+                                       gene_id = base::paste0("HLA-", gene), 
                                        gene_type = "protein_coding", 
                                        gene_name = base::paste0("HLA-", gene), 
                                        transcript_id = allele_id, 
@@ -339,7 +343,7 @@ for(gene in base::names(hla_genotype)){
                                  phase = base::c(0, base::sapply(2:base::length(CDS_annotations), function(x){(CDS_annotations[[x-1]][2] - CDS_annotations[[1]][1] + 1) %% 3})),
                                  source = hla_db_version, 
                                  type = "CDS",
-                                 gene_id = allele_id, 
+                                 gene_id = base::paste0("HLA-", gene), 
                                  gene_type = "protein_coding", 
                                  gene_name = base::paste0("HLA-", gene), 
                                  transcript_id = allele_id, 
@@ -356,7 +360,7 @@ for(gene in base::names(hla_genotype)){
                                   phase = NA,
                                   source = hla_db_version, 
                                   type = "exon",
-                                  gene_id = allele_id, 
+                                  gene_id = base::paste0("HLA-", gene), 
                                   gene_type = "protein_coding", 
                                   gene_name = base::paste0("HLA-", gene), 
                                   transcript_id = allele_id, 
@@ -373,7 +377,7 @@ for(gene in base::names(hla_genotype)){
                                         phase = 0,
                                         source = hla_db_version, 
                                         type = "start_codon",
-                                        gene_id = allele_id, 
+                                        gene_id = base::paste0("HLA-", gene), 
                                         gene_type = "protein_coding", 
                                         gene_name = base::paste0("HLA-", gene), 
                                         transcript_id = allele_id, 
@@ -389,7 +393,7 @@ for(gene in base::names(hla_genotype)){
                                        phase = 0,
                                        source = hla_db_version, 
                                        type = "stop_codon",
-                                       gene_id = allele_id, 
+                                       gene_id = base::paste0("HLA-", gene), 
                                        gene_type = "protein_coding", 
                                        gene_name = base::paste0("HLA-", gene), 
                                        transcript_id = allele_id, 
@@ -406,7 +410,7 @@ for(gene in base::names(hla_genotype)){
                                  phase = 0,
                                  source = hla_db_version, 
                                  type = "UTR",
-                                 gene_id = allele_id, 
+                                 gene_id = base::paste0("HLA-", gene), 
                                  gene_type = "protein_coding", 
                                  gene_name = base::paste0("HLA-", gene), 
                                  transcript_id = allele_id, 
@@ -428,6 +432,26 @@ for(gene in base::names(hla_genotype)){
     start_pos <- start_pos + base::nchar(seq)
   }
 }
+
+# For each HLA gene, collapse multiple gene-level entries (one per allele) into a single gene annotation spanning all concatenated alleles
+for(gene in base::unique(gtf_HLA$gene_name)){
+  # Extract all gene-level rows for this gene
+  gene_annotations <- gtf_HLA[gtf_HLA$gene_id == gene & gtf_HLA$type == "gene", ]
+  # Remove the original (allele-specific) gene rows from the GTF
+  gtf_HLA <- gtf_HLA[!(gtf_HLA$gene_id == gene & gtf_HLA$type == "gene"), ]
+  # Recompute gene start and end to cover the full span of all alleles
+  gene_annotations$start <- base::min(gene_annotations$start)
+  gene_annotations$end <- base::max(gene_annotations$end)
+  # Update gene width based on the new coordinates
+  gene_annotations$width <- base::max(gene_annotations$end) - base::min(gene_annotations$start) + 1
+  # Reinsert a single, non-duplicated gene entry into the GTF data frame
+  gtf_HLA <- base::rbind(gtf_HLA, dplyr::distinct(gene_annotations, .keep_all = FALSE))
+}
+
+# Convert feature type to an ordered factor
+gtf_HLA$type <- base::factor(x = gtf_HLA$type, levels = base::c("gene", "transcript", "CDS", "exon", "start_codon", "stop_codon", "UTR"), ordered = TRUE)
+# Sort the GTF by genomic start coordinate, then by feature type order
+gtf_HLA <- gtf_HLA[base::order(gtf_HLA$start, gtf_HLA$type), ]
 
 
 ####################################################################################################
