@@ -35,7 +35,7 @@ awk '{
     if($i ~ /^UB:Z:/) { ub=substr($i,6) }
   }
   if(cb != "NA" && ub != "NA") {
-    print read_id"\t"chr"\t"pos"\t"cb"\t"ub
+    print read_id"\t"cb"\t"ub"\t"chr"\t"pos
   }
 }' > overview_reads.tsv
 
