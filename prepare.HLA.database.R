@@ -3,8 +3,8 @@
 # Define the command-line options for the script using optparse
 option_list <- list(
   optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR"),
-  optparse::make_option(opt_str = base::c("-I", "--class-I"), action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class I genes"),
-  optparse::make_option(opt_str = base::c("-II", "--class-II"), action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class II genes")
+  optparse::make_option(opt_str = "--class-I-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class I genes"),
+  optparse::make_option(opt_str = "--class-II-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class II genes")
 )
 
 # Parse command-line arguments based on the defined options
@@ -12,8 +12,8 @@ opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 
 # Assign parsed arguments to internal variables for use in the script
 output_dir <- opt$`output-dir`
-only.HLAclassI <- opt$`class-I`
-only.HLAclassII <- opt$`class-II`
+only.HLAclassI <- opt$`class-I-only`
+only.HLAclassII <- opt$`class-II-only`
 
 # Remove trailing slash if present
 output_dir <- base::sub(pattern = "/$", replacement = "", x = output_dir)
