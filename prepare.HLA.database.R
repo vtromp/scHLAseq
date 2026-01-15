@@ -97,8 +97,8 @@ allele_list$seq <- base::sapply(X = allele_list$AlleleID, FUN = function(allele_
 hla_genotype <- jsonlite::fromJSON(genotype_file)
 
 # Restrict genotype object to HLA class II loci (DP, DQ, DR)
-if(only.HLAclassI){hla_genotype <- hla_genotype[base::grepl(pattern = "^^(A|B|C|E|F|G|H|J|K|L|N|P|R|S|T|U|V|W|Y)\\*", x = base::names(hla_genotype))]}
-if(only.HLAclassII){hla_genotype <- hla_genotype[base::grepl(pattern = "^(DP|DQ|DR)(A|B)[0-9]?\\*", x = base::names(hla_genotype))]}
+if(only.HLAclassI){hla_genotype <- hla_genotype[base::grepl(pattern = "^^(A|B|C|E|F|G|H|J|K|L|N|P|R|S|T|U|V|W|Y)", x = base::names(hla_genotype))]}
+if(only.HLAclassII){hla_genotype <- hla_genotype[base::grepl(pattern = "^(DP|DQ|DR)(A|B)[0-9]?", x = base::names(hla_genotype))]}
 
 # Initialize an empty named character vector to store HLA allele sequences
 hla_genotype_seqs <- base::c()
