@@ -117,7 +117,7 @@ for(gene in base::names(hla_genotype)){
 # Convert extracted sequences into a DNAStringSet object
 hla_genotype_seqs <- Biostrings::DNAStringSet(x = hla_genotype_seqs)
 # Write all HLA allele sequences to a FASTA file
-Biostrings::writeXStringSet(hla_genotype_seqs, filepath = glue::glue("{output_dir}/HLA_genotype.fasta"))
+Biostrings::writeXStringSet(hla_genotype_seqs, filepath = glue::glue("{output_dir}/genotype.fasta"))
 
 # Remove the temporary IPD-IMGT/HLA database directory
 base::unlink(x = glue::glue("{output_dir}/IPD_IMGT_HLA/"), recursive = TRUE, force = TRUE)
