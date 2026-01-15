@@ -91,7 +91,7 @@ arcasHLA extract ""$OUTPUT_DIR"/cellranger_count/outs/possorted_genome_bam.bam" 
   --threads "$(nproc)"
 
 # Perform HLA genotyping using the extracted reads
-arcasHLA genotype ""$OUTPUT_DIR"/arcashla_genotype/extracted_reads.fq.gz" \
+arcasHLA genotype ""$OUTPUT_DIR"/arcashla_genotype/possorted_genome_bam.extracted.fq.gz" \
   --single \
   --avg "$READ_LENGTH" \
   --outdir ""$OUTPUT_DIR"/arcashla_genotype/" \
@@ -99,9 +99,9 @@ arcasHLA genotype ""$OUTPUT_DIR"/arcashla_genotype/extracted_reads.fq.gz" \
   --threads "$(nproc)"
 
 # Rename extracted_reads output files to remove the common prefix
-for file in ""$OUTPUT_DIR"/arcashla_genotype/extracted_reads.*"; do
+for file in "$OUTPUT_DIR"/arcashla_genotype/possorted_genome_bam.*; do
   base=$(basename "$file")
-  newname=${base#extracted_reads.}
+  newname=${base#possorted_genome_bam.}
   mv "$file" ""$OUTPUT_DIR"/arcashla_genotype/"$newname""
 done
 
