@@ -2,6 +2,7 @@
 
 # Define the command-line options for the script using optparse
 option_list <- list(
+  optparse::make_option(opt_str = base::c("-g", "--genotype-file"), action = "store", type = "character", help = "arcasHLA genotype JSON", metavar = "JSON"),
   optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR"),
   optparse::make_option(opt_str = "--class-I-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class I genes"),
   optparse::make_option(opt_str = "--class-II-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class II genes")
@@ -11,7 +12,7 @@ option_list <- list(
 opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 
 # Assign parsed arguments to internal variables for use in the script
-output_dir <- opt$`output-dir`
+genotype_file <- opt$`genotype-file`
 only.HLAclassI <- opt$`class-I-only`
 only.HLAclassII <- opt$`class-II-only`
 
@@ -91,12 +92,30 @@ allele_list$seq <- base::sapply(X = allele_list$AlleleID, FUN = function(allele_
   return(coding_seq)
 })
 
+# Read HLA genotype JSON input file produced by arcasHLA
+hla_genotype <- jsonlite::fromJSON(genotype_file)
+
+# Restrict genotype object to HLA class II loci (DP, DQ, DR)
+hla_genotype <- hla_genotype[base::grepl(pattern = "^DP|^DQ|^DR", x = base::names(hla_genotype))]
+
+# Initialize an empty named character vector to store HLA allele sequences
+hla_genotype_seqs <- base::c()
+
+# Iterate over each HLA gene in the genotype file
+for(gene in base::names(hla_genotype)){
+  # Iterate over all unique alleles for this HLA gene
+  for(allele in base::unique(hla_genotype[[gene]])){
+    # Find the first matching entry in allele_list whose allele field contains the current allele string (exact substring match)
+    allele_info <- allele_list[base::grepl(pattern = allele, x = allele_list$Allele, fixed = TRUE), ][1,]
+    # Store the sequence in the output vector, using the allele name as the key
+    hla_genotype_seqs[allele_info$Allele] <- allele_info$seq
+  }
+}
+
 # Convert extracted sequences into a DNAStringSet object
-allele_sequences <- Biostrings::DNAStringSet(x = allele_list$seq)
-# Assign full allele names to each sequence
-names(allele_sequences) <- base::paste0("HLA-", allele_list$Allele)
+hla_genotype_seqs <- Biostrings::DNAStringSet(x = hla_genotype_seqs)
 # Write all HLA allele sequences to a FASTA file
-Biostrings::writeXStringSet(allele_sequences, filepath = glue::glue("{output_dir}/HLA_alleles.fasta"))
+Biostrings::writeXStringSet(hla_genotype_seqs, filepath = glue::glue("{output_dir}/HLA_genotype.fasta"))
 
 # Remove the temporary IPD-IMGT/HLA database directory
 base::unlink(x = glue::glue("{output_dir}/IPD_IMGT_HLA/"), recursive = TRUE, force = TRUE)
