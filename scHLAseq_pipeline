@@ -83,65 +83,57 @@ cellranger count --id cellranger_count \
 # ------------------------------- 
 
 # Create output directory for arcasHLA genotype
-mkdir -p ""$OUTPUT_DIR"/arcashla_genotype/"
+mkdir -p $OUTPUT_DIR/arcashla_genotype/
 
 # Extract HLA-related and unmapped reads from the Cell Ranger BAM file
-arcasHLA extract ""$OUTPUT_DIR"/cellranger_count/outs/possorted_genome_bam.bam" \
+arcasHLA extract $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam \
   --unmapped \
   --single \
-  --outdir ""$OUTPUT_DIR"/arcashla_genotype/" \
-  --temp "$TEMP_DIR" \
-  --threads "$(nproc)"
+  --outdir $OUTPUT_DIR/arcashla_genotype/ \
+  --temp $TEMP_DIR \
+  --threads $(nproc)
 
 # Perform HLA genotyping using the extracted reads
-arcasHLA genotype ""$OUTPUT_DIR"/arcashla_genotype/possorted_genome_bam.extracted.fq.gz" \
+arcasHLA genotype $OUTPUT_DIR/arcashla_genotype/possorted_genome_bam.extracted.fq.gz \
   --single \
-  --avg "$READ_LENGTH" \
-  --outdir ""$OUTPUT_DIR"/arcashla_genotype/" \
-  --temp "$TEMP_DIR" \
-  --threads "$(nproc)"
+  --avg $READ_LENGTH \
+  --outdir $OUTPUT_DIR/arcashla_genotype/ \
+  --temp $TEMP_DIR \
+  --threads $(nproc)
 
 # Rename extracted_reads output files to remove the common prefix
-for file in "$OUTPUT_DIR"/arcashla_genotype/possorted_genome_bam.*; do
-  base=$(basename "$file")
+for file in $OUTPUT_DIR/arcashla_genotype/possorted_genome_bam.*; do
+  base=$(basename $file)
   newname=${base#possorted_genome_bam.}
-  mv "$file" ""$OUTPUT_DIR"/arcashla_genotype/"$newname""
+  mv $file $OUTPUT_DIR/arcashla_genotype/$newname
 done
 
 # Retrieve IPD-IMGT/HLA allele sequences for arcasHLA-identified class II alleles
-""$SCRIPT_DIR"/scripts/fetch.HLA.allele.seqs.R" -g ""$OUTPUT_DIR"/arcashla_genotype/genotype.json" -o ""$OUTPUT_DIR"/arcashla_genotype/" --class-II-only
+$SCRIPT_DIR/scripts/fetch.HLA.allele.seqs.R -g $OUTPUT_DIR/arcashla_genotype/genotype.json -o $OUTPUT_DIR/arcashla_genotype/ --class-II-only
 
 
 # -------------------------------
-# 
+# Re-align reads from chromosome 6 and unmapped reads to allelic-specific HLA reference sequences 
 # ------------------------------- 
 
-#
-zcat ""$REF_TRANSCRIPTOME"/genes/genes.gtf.gz" | \
-awk -F '\t' 'BEGIN{OFS="\t"}
-$1=="chr6" &&
-$3=="gene" &&
-$9 ~ /gene_name "HLA-(DP|DQ|DR)/ {
-  match($9, /gene_name "([^"]+)"/, g)
-  print $1, $4-1, $5, g[1], ".", $7
-}' > ""$OUTPUT_DIR"/HLA_classII_genes.bed"
+# Create output directory for allelic expression analysis
+mkdir -p $OUTPUT_DIR/allelic_expression/
 
-#
-samtools view -h -L HLA_classII_genes.bed ""$OUTPUT_DIR"/cellranger_count/outs/possorted_genome_bam.bam" | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > ""$OUTPUT_DIR"/HLA_classII_mapped_reads.sam"
-samtools view -h -f 4 ""$OUTPUT_DIR"/cellranger_count/outs/possorted_genome_bam.bam" | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > ""$OUTPUT_DIR"/unmapped_reads.sam"
-#
-samtools view -b -o ""$OUTPUT_DIR"/HLA_classII_mapped_reads.bam" ""$OUTPUT_DIR"/HLA_classII_mapped_reads.sam"
-samtools view -b -o ""$OUTPUT_DIR"/unmapped_reads.bam" ""$OUTPUT_DIR"/unmapped_reads.sam"
-#
-samtools merge -o ""$OUTPUT_DIR"/HLA_classII_and_unmapped_reads.bam" ""$OUTPUT_DIR"/HLA_classII_mapped_reads.bam" ""$OUTPUT_DIR"/unmapped_reads.bam"
-#
-rm ""$OUTPUT_DIR"/HLA_classII_mapped_reads.sam" ""$OUTPUT_DIR"/unmapped_reads.sam" ""$OUTPUT_DIR"/HLA_classII_mapped_reads.bam" ""$OUTPUT_DIR"/unmapped_reads.bam"
+# Extract reads mapped to chromosome 6 and unmapped reads that contain valid cell barcode (CB) and UMI (UB) tags, retaining the SAM header
+samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam chr6 | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam
+samtools view -h -f 4 $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > $OUTPUT_DIR/allelic_expression/unmapped_reads.sam
+# Convert SAM files to BAM and merge
+samtools view -b -o $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam
+samtools view -b -o $OUTPUT_DIR/allelic_expression/unmapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.sam
+samtools merge -o $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.bam
+# Remove intermediate SAM and BAM files to save disk space
+rm $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam $OUTPUT_DIR/allelic_expression/unmapped_reads.sam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.bam
 
-#
-samtools fastq ""$OUTPUT_DIR"/HLA_classII_and_unmapped_reads.bam" > ""$OUTPUT_DIR"/HLA_classII_and_unmapped_reads.fastq"
+# Convert merged BAM file to FASTQ for downstream allele-specific alignment
+samtools fastq $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq
 
-#
-samtools view ""$OUTPUT_DIR"/HLA_classII_and_unmapped_reads.bam" | \
+# Create a TSV file listing read ID, cell barcode, UMI, chromosome, and genomic position for all reads with valid CB and UB tags
+samtools view $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam | \
 awk '{
   read_id=$1;
   chr=$3;
@@ -155,19 +147,25 @@ awk '{
   if(cb != "NA" && ub != "NA") {
     print read_id"\t"cb"\t"ub"\t"chr"\t"pos
   }
-}' > ""$OUTPUT_DIR"/overview_reads.tsv"
+}' > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv
 
-#
-vsearch --usearch_global ""$OUTPUT_DIR"/HLA_classII_and_unmapped_reads.fastq" --db ""$OUTPUT_DIR"/arcashla_genotype/genotype.fasta" \
+# Align extracted reads against arcasHLA-derived HLA allele sequences to quantify allele-specific expression
+vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
   --id 0.96 \
   --query_cov 1.0 \
   --maxaccepts 0 \
   --maxrejects 0 \
   --userfields query+target+id+mism+gaps+tilo+tihi \
-  --userout ""$OUTPUT_DIR"/all_HLA_alignments.tsv"
+  --userout $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_realigned.tsv
 
 
 # -------------------------------
 # 
 # ------------------------------- 
 
+# 
+$SCRIPT_DIR/scripts/calculate_allele_count_matrix.R \
+  --reads $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv \
+  --alignments $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_realigned.tsv \
+  --gtf $REF_TRANSCRIPTOME/genes/genes.gtf.gz \
+  --output-dir $OUTPUT_DIR/allelic_expression/

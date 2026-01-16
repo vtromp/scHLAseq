@@ -114,6 +114,9 @@ for(gene in base::names(hla_genotype)){
   }
 }
 
+# Prefix all HLA allele sequence names with "HLA-" to ensure consistent allele naming
+base::names(hla_genotype_seqs) <- base::paste0("HLA-", base::names(hla_genotype_seqs))
+
 # Convert extracted sequences into a DNAStringSet object
 hla_genotype_seqs <- Biostrings::DNAStringSet(x = hla_genotype_seqs)
 # Write all HLA allele sequences to a FASTA file
