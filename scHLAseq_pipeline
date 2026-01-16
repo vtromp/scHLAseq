@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Resolve the absolute path to the directory where this script is located, allowing helper scripts and resources to be referenced reliably regardless of the current working directory or how the script was invoked
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # -------------------------------
 # Initialize variables
 # -------------------------------
@@ -105,8 +108,8 @@ for file in "$OUTPUT_DIR"/arcashla_genotype/possorted_genome_bam.*; do
   mv "$file" ""$OUTPUT_DIR"/arcashla_genotype/"$newname""
 done
 
-#
-fetch.HLA.allele.seqs.R -g ""$OUTPUT_DIR"/arcashla_genotype/genotype.json" -o ""$OUTPUT_DIR"/arcashla_genotype/" --class-II-only
+# Retrieve IPD-IMGT/HLA allele sequences for arcasHLA-identified class II alleles
+""$SCRIPT_DIR"/scripts/fetch.HLA.allele.seqs.R" -g ""$OUTPUT_DIR"/arcashla_genotype/genotype.json" -o ""$OUTPUT_DIR"/arcashla_genotype/" --class-II-only
 
 
 # -------------------------------
