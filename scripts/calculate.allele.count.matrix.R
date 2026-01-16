@@ -85,7 +85,7 @@ write.table(x = alignments_filtered, file = base::sub(pattern = "\\.tsv$", repla
 # - Count the number of unique UMIs observed
 # - Pivot the data to a wide format: alleles as rows, barcodes as columns
 # - Fill missing values with 0 (no UMIs observed)
-mat <- alignments |>
+mat <- alignments_filtered |>
   dplyr::group_by(allele, cell.barcode) |>
   dplyr::summarise(n_umi = dplyr::n_distinct(umi), .groups = "drop") |>
   tidyr::pivot_wider(names_from = cell.barcode, values_from = n_umi, values_fill = 0) |>

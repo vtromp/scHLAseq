@@ -57,7 +57,7 @@ REF_TRANSCRIPTOME="${REF_TRANSCRIPTOME%/}"
 OUTPUT_DIR="${OUTPUT_DIR%/}"
 TEMP_DIR="${TEMP_DIR%/}"
 
-#
+# Append the FASTQ directory name to the output path to create a sample-specific output directory
 OUTPUT_DIR="$OUTPUT_DIR/$(basename "$FASTQS")_scHLAseq"
 
 
@@ -163,12 +163,12 @@ vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.
 
 
 # -------------------------------
-# 
+# Construct allele count matrix
 # ------------------------------- 
 
-# 
+# Use read metadata and realigned HLA reads to generate a sparse allele × cell barcode matrix, counting unique UMIs per allele-barcode combination
 $SCRIPT_DIR/scripts/calculate_allele_count_matrix.R \
   --reads $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv \
-  --alignments $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_realigned.tsv \
+  --alignments $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads_realigned.tsv \
   --gtf $REF_TRANSCRIPTOME/genes/genes.gtf.gz \
   --output-dir $OUTPUT_DIR/allelic_expression/
