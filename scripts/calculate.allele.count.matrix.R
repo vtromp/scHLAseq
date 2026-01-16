@@ -5,7 +5,7 @@ option_list <- list(
   optparse::make_option(opt_str = base::c("-r", "--reads"), action = "store", type = "character", help = "TSV file summarizing reads with cell barcode and UMI information", metavar = "TSV"),
   optparse::make_option(opt_str = base::c("-a", "--alignments"), action = "store", type = "character", help = "TSV file produced by vsearch containing read-to-HLA alignments", metavar = "TSV"),
   optparse::make_option(opt_str = base::c("-g", "--gtf"), action = "store", type = "character", help = "GTF file of reference transcriptome", metavar = "GTF"),
-  optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR"),
+  optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR")
 )
 
 # Parse command-line arguments based on the defined options

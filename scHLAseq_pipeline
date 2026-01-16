@@ -109,7 +109,10 @@ for file in $OUTPUT_DIR/arcashla_genotype/possorted_genome_bam.*; do
 done
 
 # Retrieve IPD-IMGT/HLA allele sequences for arcasHLA-identified class II alleles
-$SCRIPT_DIR/scripts/fetch.HLA.allele.seqs.R -g $OUTPUT_DIR/arcashla_genotype/genotype.json -o $OUTPUT_DIR/arcashla_genotype/ --class-II-only
+$SCRIPT_DIR/scripts/fetch.HLA.allele.seqs.R \
+  -g $OUTPUT_DIR/arcashla_genotype/genotype.json \
+  -o $OUTPUT_DIR/arcashla_genotype/ \
+  --class-II-only
 
 
 # -------------------------------
