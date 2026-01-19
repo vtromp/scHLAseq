@@ -167,7 +167,7 @@ vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.
 # ------------------------------- 
 
 # Use read metadata and realigned reads to generate a sparse allele × cell barcode matrix, counting unique UMIs per (unique) allele-barcode combination
-$SCRIPT_DIR/scripts/calculate_allele_count_matrix.R \
+$SCRIPT_DIR/scripts/calculate.allele.count.matrix.R \
   --reads $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv \
   --alignments $OUTPUT_DIR/allelic_expression/hla_alignments.tsv \
   --gtf $REF_TRANSCRIPTOME/genes/genes.gtf.gz \

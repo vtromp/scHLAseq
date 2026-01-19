@@ -86,9 +86,9 @@ alignments_filtered <- alignments_filtered |>
   dplyr::ungroup()
 
 # Collapse UMIs mapping to multiple alleles by removing the allele suffix after "*"
-alignments_filtered <- alignments_filtered[, base::c("barcode", "umi", "hla.gene", "allele")] |>
+alignments_filtered <- alignments_filtered[, base::c("barcode", "umi", "hla.gene", "hla.allele")] |>
   dplyr::group_by(barcode, umi, hla.gene) |>
-  dplyr::mutate(allele = base::ifelse(dplyr::n_distinct(allele) > 1, base::sub(pattern = "\\*.*$", replacement = "", x = allele), allele)) |>
+  dplyr::mutate(hla.allele = base::ifelse(dplyr::n_distinct(hla.allele) > 1, base::sub(pattern = "\\*.*$", replacement = "", x = hla.allele), hla.allele)) |>
   dplyr::ungroup()
 
 # For each allele-barcode pair:
@@ -97,14 +97,14 @@ alignments_filtered <- alignments_filtered[, base::c("barcode", "umi", "hla.gene
 # - Fill missing values with 0 (no UMIs observed)
 # - Order the dataframe by allele name
 mat <- alignments_filtered |>
-  dplyr::group_by(allele, barcode) |>
+  dplyr::group_by(hla.allele, barcode) |>
   dplyr::summarise(n_umi = dplyr::n_distinct(umi), .groups = "drop") |>
   tidyr::pivot_wider(names_from = barcode, values_from = n_umi, values_fill = 0) |>
-  dplyr::arrange(allele) |>
+  dplyr::arrange(hla.allele) |>
   base::as.data.frame()
 
 # Set rownames to allele names and convert the remaining data frame to a numeric matrix
-base::rownames(mat) <- mat$allele
+base::rownames(mat) <- mat$hla.allele
 mat <- base::as.matrix(mat[,-1])
 
 # Convert to sparse matrix to save space for mostly-zero matrices
