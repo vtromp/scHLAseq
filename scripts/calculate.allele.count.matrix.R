@@ -78,8 +78,17 @@ alignments_filtered <- alignments_filtered |>
   dplyr::filter(dplyr::n_distinct(hla.gene) == 1) |>
   dplyr::ungroup()
 
+#
+alignments_filtered <- alignments_filtered[, base::c("read.id", "cell.barcode", "umi", "chr", "pos", "gene", "allele", "hla.gene", "start", "end", "n.mismatches", "n.gaps", "match")]
+
 # Save the filtered alignments to a TSV file
 write.table(x = alignments_filtered, file = base::sub(pattern = "\\.tsv$", replacement = "_filtered.tsv", alignment_file), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+#
+alignments_filtered <- alignments_filtered[, base::c("cell.barcode", "umi", "hla.gene", "allele")] |>
+  dplyr::group_by(cell.barcode, umi, hla.gene) |>
+  dplyr::mutate(allele = base::ifelse(dplyr::n_distinct(allele) > 1, base::sub(pattern = "\\*.*$", replacement = "", x = allele), allele)) |>
+  dplyr::ungroup()
 
 # For each allele-barcode pair:
 # - Count the number of unique UMIs observed
@@ -101,7 +110,7 @@ sparse_mat <- Matrix::Matrix(data = mat, sparse = TRUE)
 # Create output directory for allele count matrix
 base::dir.create(path = base::paste0(output_dir, "/allele_count_matrix/"))
 # Save the matrix in Matrix Market format (widely compatible)
-Matrix::writeMM(obj = sparse_mat, file = glue::glue("{output_dir}/allele_count_matrix/matrix.mtx"))
+Matrix::writeMM(obj = sparse_mat, file = glue::glue("{output_dir}/allele_count_matrix/counts.mtx"))
 # Save allele and barcode identifiers to separate text files
 utils::write.table(x = base::rownames(mat), file = glue::glue("{output_dir}/allele_count_matrix/alleles.txt"), quote = FALSE, col.names = FALSE, row.names = FALSE)
 utils::write.table(x = base::colnames(mat), file = glue::glue("{output_dir}/allele_count_matrix/barcodes.txt"), quote = FALSE, col.names = FALSE, row.names = FALSE)
