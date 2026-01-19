@@ -67,7 +67,7 @@ alignments$pos[alignments$pos == "0"] <- NA
 alignments$gene[alignments$gene == ""] <- NA
 
 # Reorder columns and save the alignments to a TSV file
-alignments <- alignments[, base::c("read.id", "cell.barcode", "umi", "chr", "pos", "gene", "hla.allele", "hla.gene", "match", "n.mismatches", "n.gaps", "start", "end")]
+alignments <- alignments[, base::c("read.id", "barcode", "umi", "chr", "pos", "gene", "hla.allele", "hla.gene", "match", "n.mismatches", "n.gaps", "start", "end")]
 write.table(x = alignments, file = base::sub(pattern = "\\.tsv$", replacement = "_processed.tsv", x = alignment_file), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # Retain reads that either have no gene assignment or overlap an HLA gene
@@ -81,13 +81,13 @@ alignments_filtered <- alignments_filtered |>
 
 # Remove ambiguous UMIs by retaining only cell barcode–UMI combinations that map to a single HLA gene
 alignments_filtered <- alignments_filtered |>
-  dplyr::group_by(cell.barcode, umi) |>
+  dplyr::group_by(barcode, umi) |>
   dplyr::filter(dplyr::n_distinct(hla.gene) == 1) |>
   dplyr::ungroup()
 
 # Collapse UMIs mapping to multiple alleles by removing the allele suffix after "*"
-alignments_filtered <- alignments_filtered[, base::c("cell.barcode", "umi", "hla.gene", "allele")] |>
-  dplyr::group_by(cell.barcode, umi, hla.gene) |>
+alignments_filtered <- alignments_filtered[, base::c("barcode", "umi", "hla.gene", "allele")] |>
+  dplyr::group_by(barcode, umi, hla.gene) |>
   dplyr::mutate(allele = base::ifelse(dplyr::n_distinct(allele) > 1, base::sub(pattern = "\\*.*$", replacement = "", x = allele), allele)) |>
   dplyr::ungroup()
 
@@ -97,9 +97,9 @@ alignments_filtered <- alignments_filtered[, base::c("cell.barcode", "umi", "hla
 # - Fill missing values with 0 (no UMIs observed)
 # - Order the dataframe by allele name
 mat <- alignments_filtered |>
-  dplyr::group_by(allele, cell.barcode) |>
+  dplyr::group_by(allele, barcode) |>
   dplyr::summarise(n_umi = dplyr::n_distinct(umi), .groups = "drop") |>
-  tidyr::pivot_wider(names_from = cell.barcode, values_from = n_umi, values_fill = 0) |>
+  tidyr::pivot_wider(names_from = barcode, values_from = n_umi, values_fill = 0) |>
   dplyr::arrange(allele) |>
   base::as.data.frame()
 
