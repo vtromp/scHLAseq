@@ -22,25 +22,19 @@ output_dir <- base::sub(pattern = "/$", replacement = "", x = output_dir)
 
 # Read the vsearch alignment TSV file (no header) and assign column names
 alignments <- utils::read.table(file = alignment_file, header = FALSE, sep = "\t")
-base::colnames(alignments) <- base::c("read.id", "allele", "match", "n.mismatches", "n.gaps", "start", "end")
+base::colnames(alignments) <- base::c("read.id", "hla.allele", "match", "n.mismatches", "n.gaps", "start", "end")
 
 # Extract the HLA gene name (everything before the "*")
-alignments$hla.gene <- base::sub(pattern = "\\*.*$", replacement = "", alignments$allele)
+alignments$hla.gene <- base::sub(pattern = "\\*.*$", replacement = "", alignments$hla.allele)
 
-# Filter alignments to retain only reads that map unambiguously to a single HLA gene (reads with alignments to multiple different HLA genes are removed)
-alignments_filtered <- alignments |>
-  dplyr::group_by(read.id) |>
-  dplyr::filter(dplyr::n_distinct(hla.gene) == 1) |>
-  dplyr::ungroup()
-
-# Read the TSV summarizing reads (read ID, cell barcode, UMI, reference, position)
+# Read the TSV summarizing reads (read ID, cell barcode, UMI, reference sequence / chromosome, position)
 reads <- utils::read.table(file = read_file, header = FALSE, sep = "\t")
-base::colnames(reads) <- base::c("read.id", "cell.barcode", "umi", "chr", "pos")
+base::colnames(reads) <- base::c("read.id", "barcode", "umi", "chr", "pos")
 
-# Merge filtered alignments with read metadata by read ID
-alignments_filtered <- base::merge(x = alignments_filtered, y = reads, by = "read.id", all.x = TRUE)
+# Merge alignments with read metadata by read ID
+alignments <- base::merge(x = alignments, y = reads, by = "read.id", all.x = TRUE)
 
-# Remove reads data frame to free memory
+# Remove reads dataframe to free memory
 base::rm(reads)
 
 # Import the Gencode GTF annotation file as a data frame
@@ -50,7 +44,7 @@ gtf <- base::as.data.frame(rtracklayer::import(con = gtf_file, format = "gtf"))
 gtf <- gtf[gtf$type == "gene" & gtf$seqnames == "chr6", base::c("start", "end", "gene_name")]
 
 # Annotate each read with the gene it overlaps based on its genomic position
-alignments_filtered$gene <- base::sapply(X = alignments_filtered$pos, FUN = function(pos){
+alignments$gene <- base::sapply(X = alignments$pos, FUN = function(pos){
   # Unmapped reads have position 0 and are not assigned a gene
   if(pos == 0){return("")}
   # For mapped reads, identify genes whose genomic interval overlaps the read position
@@ -64,13 +58,26 @@ alignments_filtered$gene <- base::sapply(X = alignments_filtered$pos, FUN = func
   }
 })
 
+# Remove gtf dataframe to free memory
+base::rm(gtf)
+
 # Convert placeholder values to NA for consistency
-alignments_filtered$chr[alignments_filtered$chr == "*"] <- NA
-alignments_filtered$pos[alignments_filtered$pos == "0"] <- NA
-alignments_filtered$gene[alignments_filtered$gene == ""] <- NA
+alignments$chr[alignments$chr == "*"] <- NA
+alignments$pos[alignments$pos == "0"] <- NA
+alignments$gene[alignments$gene == ""] <- NA
+
+# Reorder columns and save the alignments to a TSV file
+alignments <- alignments[, base::c("read.id", "cell.barcode", "umi", "chr", "pos", "gene", "hla.allele", "hla.gene", "match", "n.mismatches", "n.gaps", "start", "end")]
+write.table(x = alignments, file = base::sub(pattern = "\\.tsv$", replacement = "_processed.tsv", x = alignment_file), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # Retain reads that either have no gene assignment or overlap an HLA gene
-alignments_filtered <- alignments_filtered[base::is.na(alignments_filtered$gene) | base::grepl(pattern = "HLA-", x = alignments_filtered$gene), ]
+alignments_filtered <- alignments[base::is.na(alignments$gene) | base::grepl(pattern = "HLA-", x = alignments$gene), ]
+
+# Filter alignments to retain only reads that map unambiguously to a single HLA gene (reads with alignments to multiple different HLA genes are removed)
+alignments_filtered <- alignments_filtered |>
+  dplyr::group_by(read.id) |>
+  dplyr::filter(dplyr::n_distinct(hla.gene) == 1) |>
+  dplyr::ungroup()
 
 # Remove ambiguous UMIs by retaining only cell barcode–UMI combinations that map to a single HLA gene
 alignments_filtered <- alignments_filtered |>
@@ -78,13 +85,7 @@ alignments_filtered <- alignments_filtered |>
   dplyr::filter(dplyr::n_distinct(hla.gene) == 1) |>
   dplyr::ungroup()
 
-#
-alignments_filtered <- alignments_filtered[, base::c("read.id", "cell.barcode", "umi", "chr", "pos", "gene", "allele", "hla.gene", "start", "end", "n.mismatches", "n.gaps", "match")]
-
-# Save the filtered alignments to a TSV file
-write.table(x = alignments_filtered, file = base::sub(pattern = "\\.tsv$", replacement = "_filtered.tsv", alignment_file), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-#
+# Collapse UMIs mapping to multiple alleles by removing the allele suffix after "*"
 alignments_filtered <- alignments_filtered[, base::c("cell.barcode", "umi", "hla.gene", "allele")] |>
   dplyr::group_by(cell.barcode, umi, hla.gene) |>
   dplyr::mutate(allele = base::ifelse(dplyr::n_distinct(allele) > 1, base::sub(pattern = "\\*.*$", replacement = "", x = allele), allele)) |>
@@ -94,10 +95,12 @@ alignments_filtered <- alignments_filtered[, base::c("cell.barcode", "umi", "hla
 # - Count the number of unique UMIs observed
 # - Pivot the data to a wide format: alleles as rows, barcodes as columns
 # - Fill missing values with 0 (no UMIs observed)
+# - Order the dataframe by allele name
 mat <- alignments_filtered |>
   dplyr::group_by(allele, cell.barcode) |>
   dplyr::summarise(n_umi = dplyr::n_distinct(umi), .groups = "drop") |>
   tidyr::pivot_wider(names_from = cell.barcode, values_from = n_umi, values_fill = 0) |>
+  dplyr::arrange(allele) |>
   base::as.data.frame()
 
 # Set rownames to allele names and convert the remaining data frame to a numeric matrix

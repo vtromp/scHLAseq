@@ -159,16 +159,24 @@ vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.
   --maxaccepts 0 \
   --maxrejects 0 \
   --userfields query+target+id+mism+gaps+tilo+tihi \
-  --userout $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_realigned.tsv
+  --userout $OUTPUT_DIR/allelic_expression/hla_alignments.tsv
 
 
 # -------------------------------
 # Construct allele count matrix
 # ------------------------------- 
 
-# Use read metadata and realigned HLA reads to generate a sparse allele × cell barcode matrix, counting unique UMIs per allele-barcode combination
+# Use read metadata and realigned reads to generate a sparse allele × cell barcode matrix, counting unique UMIs per (unique) allele-barcode combination
 $SCRIPT_DIR/scripts/calculate_allele_count_matrix.R \
   --reads $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv \
-  --alignments $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads_realigned.tsv \
+  --alignments $OUTPUT_DIR/allelic_expression/hla_alignments.tsv \
   --gtf $REF_TRANSCRIPTOME/genes/genes.gtf.gz \
   --output-dir $OUTPUT_DIR/allelic_expression/
+
+# Clean up intermediate alignment and read files
+rm $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv $OUTPUT_DIR/allelic_expression/hla_alignments.tsv
+
+
+# -------------------------------
+# Integrate allelic counts into Seurat object
+# ------------------------------- 

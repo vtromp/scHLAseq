@@ -22,8 +22,6 @@ cellranger_output_dir <- base::sub(pattern = "/$", replacement = "", x = cellran
 allele_count_matrix_dir <- base::sub(pattern = "/$", replacement = "", x = allele_count_matrix_dir)
 output_dir <- base::sub(pattern = "/$", replacement = "", x = output_dir)
 
-
-
 #
 data <- Seurat::Read10X_h5(filename = glue::glue("{cellranger_output_dir}/outs/filtered_feature_bc_matrix.h5"), use.names = TRUE, unique.features = TRUE)
 data <- Seurat::CreateSeuratObject(counts = data, assay = "RNA", project = project)
