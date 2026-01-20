@@ -153,7 +153,7 @@ for(gene in base::names(hla_genotype)){
     # Construct full transcript sequences by concatenating 5'UTR, exons, and 3'UTR
     transcript_seqs <- base::sapply(X = exon_subsets, FUN = function(subset) base::paste(UTR_seqs["5UTR"], subset, UTR_seqs["3UTR"], collapse = ""))
     # Store each transcript sequence in the genotype sequence list with a unique name
-    for(i in base::seq_along(along.with = transcript_seqs)){hla_genotype_seqs[base::paste0(allele, " t", i)] <- transcript_seqs[i]}
+    for(i in base::seq_along(along.with = transcript_seqs)){hla_genotype_seqs[base::paste0(allele, "_transcript", i)] <- transcript_seqs[i]}
   }
 }
 
