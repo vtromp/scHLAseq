@@ -93,62 +93,67 @@ for(gene in base::names(hla_genotype)){
     while(base::nrow(allele_info) == 0){
       # Remove the final field from the allele notation
       allele_name <- base::sub(pattern = ":[0-9]+$", replacement = "", x = allele_name)
-      # Re-search for the (shortened) allele
+      # Re-search the database using the (shortened) allele
       allele_info <- allele_list[base::grepl(pattern = allele_name, x = allele_list$Allele, fixed = TRUE), ]
     }
-    # Use the first matching allele record
+    # Select the first matching allele record
     first_match <- allele_info[1, ]
     # Load the corresponding allele record from the HLA database
     record <- hla_db[[first_match$AlleleID]]
-    # Extract all annotation entries for UTRs, exons, and introns
-    feature_lines <- base::grep(pattern = "FT +UTR|FT +exon|FT +intron", x = record, value = TRUE)
-    # Keep only exon and UTR annotation lines
-    feature_lines <- base::grep(pattern = "exon|UTR", x = feature_lines, value = TRUE)
-    # Extract numeric coordinate ranges from exon and UTR annotations
-    ranges <- base::sub(pattern = "^FT +(exon|UTR) +([0-9\\.]+)$", replacement = "\\2", x = feature_lines)
+    # Extract exon feature annotations from the record
+    exon_annotations <- base::grep(pattern = "FT +exon", x = record, value = TRUE)
+    # Extract numeric coordinate ranges from exon annotations
+    exon_ranges <- base::sub(pattern = "^FT +exon +([0-9\\.]+)$", replacement = "\\1", x = exon_annotations)
     # Convert coordinate ranges into numeric start/stop positions
-    ranges <- base::sapply(X = ranges, FUN = function(range) base::as.numeric(base::strsplit(x = range, split = "..", fixed = TRUE)[[1]]), simplify = FALSE)
+    exon_ranges <- base::sapply(X = exon_ranges, FUN = function(range) base::as.numeric(base::strsplit(x = range, split = "..", fixed = TRUE)[[1]]), simplify = FALSE)
+    # Assign exon names (exon1, exon2, ...) to the coordinate ranges
+    base::names(exon_ranges) <- base::paste0("exon", base::seq_along(exon_ranges))
     # Extract the sequence lines (everything after 'SQ')
     seq_lines <- record[(which(grepl(pattern = "^SQ +", x = record)) + 1):base::length(record)]
     # Concatenate sequence and remove non-ACGT characters
-    genomic_seq <- base::toupper(base::paste(base::gsub(pattern = "[^ACGTacgt]", replacement = "", seq_lines), collapse = ""))
-    # Extract and concatenate exon/UTR regions to form the coding sequence
-    seq <- base::paste0(base::sapply(X = ranges, FUN = function(range){base::substr(x = genomic_seq, start = range[1], stop = range[2])}), collapse = "")
-    # If only a cDNA sequence is available for this allele, iteratively search for the next best-matching allele and retrieve its UTR sequences
+    seq <- base::toupper(base::paste(base::gsub(pattern = "[^ACGTacgt]", replacement = "", seq_lines), collapse = ""))
+    # Extract exon nucleotide sequences using exon coordinate ranges
+    exon_seqs <- base::sapply(X = exon_ranges, FUN = function(range) base::substr(x = seq, start = range[1], stop = range[2]))
+    # If the first match is already genomic DNA, reuse it directly
+    if(first_match$Type == "gDNA"){second_match <- first_match}
+    # If the first match is cDNA, search for a record with a genomic sequence
     if(first_match$Type == "cDNA"){
-      # Restrict the search to genomic DNA records for the same allele group
+      # Restrict allele candidates to genomic DNA records
       allele_info <- allele_info[allele_info$Type == "gDNA", ]
       # Keep removing field notations until a match with a complete genomic sequence is found
       while(base::nrow(allele_info) == 0){
         # Remove the final field from the allele notation
         allele_name <- base::sub(pattern = ":[0-9]+$", replacement = "", x = allele_name)
-        # Re-search for the (shortened) allele with genomic sequences
+        # Re-search for genomic DNA records using the shortened allele name
         allele_info <- allele_list[base::grepl(pattern = allele_name, x = allele_list$Allele, fixed = TRUE) & allele_list$Type == "gDNA", ]
       }
-      # Use the first matching record with a genomic sequence
+      # Select the first matching record with a genomic sequence
       second_match <- allele_info[1, ]
-      # Load the corresponding allele record from the HLA database
-      record <- hla_db[[second_match$AlleleID]]
-      # Extract all annotation entries for UTRs, exons, and introns
-      feature_lines <- base::grep(pattern = "FT +UTR|FT +exon|FT +intron", x = record, value = TRUE)
-      # Keep only UTR annotation lines
-      feature_lines <- base::grep(pattern = "UTR", x = feature_lines, value = TRUE)
-      # Extract numeric coordinate ranges from UTR annotations
-      UTR_ranges <- base::sub(pattern = "^FT +(exon|UTR) +([0-9\\.]+)$", replacement = "\\2", x = feature_lines)
-      # Convert coordinate ranges into numeric start/stop positions and name the ranges for later extraction
-      UTR_ranges <- base::sapply(X = UTR_ranges, FUN = function(range) base::as.numeric(base::strsplit(x = range, split = "..", fixed = TRUE)[[1]]), simplify = FALSE)
-      base::names(UTR_ranges) <- base::c("5UTR", "3UTR")
-      # Extract the sequence lines (everything after 'SQ')
-      seq_lines <- record[(which(grepl(pattern = "^SQ +", x = record)) + 1):base::length(record)]
-      # Concatenate sequence and remove non-ACGT characters
-      genomic_seq <- base::toupper(base::paste(base::gsub(pattern = "[^ACGTacgt]", replacement = "", seq_lines), collapse = ""))
-      # Extract UTR sequences using the UTR ranges
-      UTR_seqs <- base::sapply(X = UTR_ranges, FUN = function(range){base::substr(x = genomic_seq, start = range[1], stop = range[2])})
-      # Add UTR sequences to the coding sequence
-      seq <- base::paste0(UTR_seqs["5UTR"], seq, UTR_seqs["3UTR"])
     }
-    # Store the sequence in the output vector, using the allele name as the key
-    hla_genotype_seqs[allele] <- seq
+    # Load the corresponding allele record from the HLA database
+    record <- hla_db[[second_match$AlleleID]]
+    # Extract UTR feature annotations from the record
+    UTR_annotations <- base::grep(pattern = "FT +UTR", x = record, value = TRUE)
+    # Extract numeric coordinate ranges from UTR annotations
+    UTR_ranges <- base::sub(pattern = "^FT +UTR +([0-9\\.]+)$", replacement = "\\1", x = UTR_annotations)
+    # Convert coordinate ranges into numeric start/stop positions
+    UTR_ranges <- base::sapply(X = UTR_ranges, FUN = function(range) base::as.numeric(base::strsplit(x = range, split = "..", fixed = TRUE)[[1]]), simplify = FALSE)
+    # Name the UTR ranges explicitly as 5' and 3' UTRs
+    base::names(UTR_ranges) <- base::c("5UTR", "3UTR")
+    # Extract the sequence lines (everything after 'SQ')
+    seq_lines <- record[(which(grepl(pattern = "^SQ +", x = record)) + 1):base::length(record)]
+    # Concatenate sequence and remove non-ACGT characters
+    seq <- base::toupper(base::paste(base::gsub(pattern = "[^ACGTacgt]", replacement = "", seq_lines), collapse = ""))
+    # Extract UTR nucleotide sequences using UTR coordinate ranges
+    UTR_seqs <- base::sapply(X = UTR_ranges, FUN = function(range) base::substr(x = seq, start = range[1], stop = range[2]))
+    # Generate all non-empty ordered subsets of exons
+    exon_subsets <- base::unlist(base::lapply(X = base::seq_along(along.with = exon_seqs), FUN = function(n) utils::combn(x = exon_seqs, m = n, simplify = FALSE)), recursive = FALSE)
+    # Keep only exon subsets that include the first and the final exon
+    exon_subsets <- exon_subsets[base::sapply(X = exon_subsets, FUN = function(subset) "exon1" %in% base::names(x = subset) & base::names(x = exon_seqs)[base::length(x = exon_seqs)] %in% base::names(x = subset))]
+    # Construct full transcript sequences by concatenating 5'UTR, exons, and 3'UTR
+    transcript_seqs <- base::sapply(X = exon_subsets, FUN = function(subset) base::paste(UTR_seqs["5UTR"], subset, UTR_seqs["3UTR"], collapse = ""))
+    # Store each transcript sequence in the genotype sequence list with a unique name
+    for(i in base::seq_along(along.with = transcript_seqs)){hla_genotype_seqs[base::paste0(allele, " t", i)] <- transcript_seqs[i]}
   }
 }
 
