@@ -152,7 +152,7 @@ awk '{
   }
 }' > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv
 
-# Align extracted reads against arcasHLA-derived HLA allele sequences to quantify allele-specific expression
+# Align extracted reads against arcasHLA-derived HLA allele sequences
 vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
   --id 0.96 \
   --query_cov 1.0 \

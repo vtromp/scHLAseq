@@ -147,7 +147,7 @@ for(gene in base::names(hla_genotype)){
     # Extract UTR nucleotide sequences using UTR coordinate ranges
     UTR_seqs <- base::sapply(X = UTR_ranges, FUN = function(range) base::substr(x = seq, start = range[1], stop = range[2]))
     # Generate all non-empty ordered subsets of exons
-    exon_subsets <- base::unlist(base::lapply(X = base::seq_along(along.with = exon_seqs), FUN = function(n) utils::combn(x = exon_seqs, m = n, simplify = FALSE)), recursive = FALSE)
+    exon_subsets <- base::unlist(base::lapply(X = (base::length(exon_seqs)-1):base::length(exon_seqs), FUN = function(n) utils::combn(x = exon_seqs, m = n, simplify = FALSE)), recursive = FALSE)
     # Keep only exon subsets that include the first and the final exon
     exon_subsets <- exon_subsets[base::sapply(X = exon_subsets, FUN = function(subset) "exon1" %in% base::names(x = subset) & base::names(x = exon_seqs)[base::length(x = exon_seqs)] %in% base::names(x = subset))]
     # Construct full transcript sequences by concatenating 5'UTR, exons, and 3'UTR
