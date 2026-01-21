@@ -28,9 +28,8 @@ alignments$hla.gene <- base::sub(pattern = "\\*.*$", replacement = "", alignment
 # Extract transcript number from the allele string and remove the transcript suffix from the allele string
 alignments$transcript <- base::sub(pattern = "^HLA-.*_transcript([0-9]+)$", replacement = "\\1", x = alignments$hla.allele)
 alignments$hla.allele <- base::sub(pattern = "_transcript[0-9]+$", replacement = "", x = alignments$hla.allele)
-# Reorder the columns and overwrite the original TSV file
+# Reorder and sort the alignments dataframe
 alignments <- alignments[base::order(alignments$read.id, alignments$hla.allele, alignments$transcript), base::c("read.id", "hla.gene", "hla.allele", "transcript", "match", "n.mismatches", "n.gaps", "start", "end")]
-write.table(x = alignments, file = alignment_file, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # For each read and HLA allele pair, keep only the alignment corresponding to the transcript with the highest match score
 alignments <- alignments |>
