@@ -155,7 +155,7 @@ awk '{
 # Align extracted reads against arcasHLA-derived HLA allele sequences
 vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
   --id 0.96 \
-  --query_cov 1.0 \
+  --query_cov 0.5 \
   --strand both \
   --maxaccepts 0 \
   --maxrejects 0 \

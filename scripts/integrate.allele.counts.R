@@ -29,12 +29,13 @@ data <- Seurat::CreateSeuratObject(counts = data, assay = "RNA", project = proje
 #
 default_counts <- base::as.data.frame(Seurat::GetAssayData(object = data, assay = "RNA", layer = "counts")[base::grep(pattern = "^HLA-(DP|DQ|DR)(A|B)[0-9]?$", base::rownames(data), value = TRUE), ]) |>
   tibble::rownames_to_column(var = "gene") |>
-  tidyr::pivot_longer(cols = -gene, names_to = "barcode", values_to = "default.expression")
+  tidyr::pivot_longer(cols = -gene, names_to = "barcode", values_to = "count")
 
 #
 allele_counts <- base::as.data.frame(Matrix::readMM(file = glue::glue("{allele_count_matrix_dir}/counts.mtx")))
 base::rownames(allele_counts) <- base::readLines(con = glue::glue("{allele_count_matrix_dir}/alleles.txt"))
 base::colnames(allele_counts) <- base::readLines(con = glue::glue("{allele_count_matrix_dir}/barcodes.txt"))
+
 
 #
 allele_counts_collapsed <- allele_counts
@@ -51,15 +52,23 @@ for(gene in base::unique(base::sub(pattern = "\\*.*$", replacement = "", x = bas
 #
 personalized_counts <- allele_counts_collapsed |>
   tibble::rownames_to_column(var = "gene") |>
-  tidyr::pivot_longer(cols = -gene, names_to = "barcode", values_to = "personalized.expression")
+  tidyr::pivot_longer(cols = -gene, names_to = "barcode", values_to = "count")
 
 #
-hla_expression_df <- base::merge(x = default_counts, y = personalized_counts, by = base::c("barcode", "gene"), all = TRUE)
+hla_expression_df <- base::expand.grid(barcode = base::unique(x = default_counts$barcode), gene = base::unique(x = base::c(default_counts$gene, personalized_counts$gene)), KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
 #
-hla_expression_df$default.expression[base::is.na(hla_expression_df$default.expression)] <- 0
-hla_expression_df$personalized.expression[base::is.na(hla_expression_df$personalized.expression)] <- 0
+hla_expression_df <- base::merge(x = hla_expression_df, y = default_counts, by = base::c("barcode", "gene"), all.x = TRUE)
+base::colnames(hla_expression_df)[3] <- "default.count"
 #
-hla_expression_df <- hla_expression_df[hla_expression_df$barcode %in% default_counts$barcode, ]
+hla_expression_df <- base::merge(x = hla_expression_df, y = personalized_counts, by = base::c("barcode", "gene"), all.x = TRUE)
+base::colnames(hla_expression_df)[4] <- "personalized.count"
+#
+hla_expression_df[base::is.na(hla_expression_df)] <- 0
+
+
+
+
+
 
 
 

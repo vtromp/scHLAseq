@@ -3,6 +3,7 @@
 # Define the command-line options for the script using optparse
 option_list <- list(
   optparse::make_option(opt_str = base::c("-g", "--genotype-file"), action = "store", type = "character", help = "arcasHLA genotype JSON", metavar = "JSON"),
+  optparse::make_option(opt_str = base::c("-s", "--max-exon-skips"), action = "store", type = "integer", default = 1, help = "Maximum number of internal exons that may be skipped when generating transcript sequences (default: 0)"),
   optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR"),
   optparse::make_option(opt_str = "--class-I-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class I genes"),
   optparse::make_option(opt_str = "--class-II-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class II genes")
@@ -13,6 +14,7 @@ opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 
 # Assign parsed arguments to internal variables for use in the script
 genotype_file <- opt$`genotype-file`
+max_exon_skips <- opt$`max-exon-skips`
 output_dir <- opt$`output-dir`
 only.HLAclassI <- opt$`class-I-only`
 only.HLAclassII <- opt$`class-II-only`
@@ -147,13 +149,13 @@ for(gene in base::names(hla_genotype)){
     # Extract UTR nucleotide sequences using UTR coordinate ranges
     UTR_seqs <- base::sapply(X = UTR_ranges, FUN = function(range) base::substr(x = seq, start = range[1], stop = range[2]))
     # Generate all non-empty ordered subsets of exons
-    exon_subsets <- base::unlist(base::lapply(X = (base::length(exon_seqs)-1):base::length(exon_seqs), FUN = function(n) utils::combn(x = exon_seqs, m = n, simplify = FALSE)), recursive = FALSE)
+    exon_subsets <- base::unlist(base::lapply(X = base::length(exon_seqs):base::min(2, (base::length(exon_seqs)-max_exon_skips)), FUN = function(n) utils::combn(x = exon_seqs, m = n, simplify = FALSE)), recursive = FALSE)
     # Keep only exon subsets that include the first and the final exon
     exon_subsets <- exon_subsets[base::sapply(X = exon_subsets, FUN = function(subset) "exon1" %in% base::names(x = subset) & base::names(x = exon_seqs)[base::length(x = exon_seqs)] %in% base::names(x = subset))]
     # Construct full transcript sequences by concatenating 5'UTR, exons, and 3'UTR
     transcript_seqs <- base::sapply(X = exon_subsets, FUN = function(subset) base::paste(base::c(UTR_seqs["5UTR"], subset, UTR_seqs["3UTR"]), collapse = ""))
     # Store each transcript sequence in the genotype sequence list with a unique name
-    for(i in base::seq_along(along.with = transcript_seqs)){hla_genotype_seqs[base::paste0(allele, " transcript", i)] <- transcript_seqs[i]}
+    for(i in base::seq_along(along.with = transcript_seqs)){hla_genotype_seqs[base::paste0(allele, "_transcript", i)] <- transcript_seqs[i]}
   }
 }
 
