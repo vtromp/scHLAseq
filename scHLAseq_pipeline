@@ -143,23 +143,29 @@ awk '{
   pos=$4;
   cb="NA";
   ub="NA";
+  re="NA";
   for(i=12;i<=NF;i++){
     if($i ~ /^CB:Z:/) { cb=substr($i,6) }
     if($i ~ /^UB:Z:/) { ub=substr($i,6) }
+    if($i ~ /^RE:A:/) { re=substr($i,6,1) }
   }
   if(cb != "NA" && ub != "NA") {
-    print read_id"\t"cb"\t"ub"\t"chr"\t"pos
+    print read_id"\t"cb"\t"ub"\t"chr"\t"pos"\t"re
   }
 }' > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv
 
 # Align extracted reads against arcasHLA-derived HLA allele sequences
+# Note:
+# 1) STAR (used by Cell Ranger) has a default --outFilterMismatchNoverReadLmax = 0.04 (see STAR manual), meaning the maximum allowed mismatches per read pair is 4% of read length, therefore --id is set to 0.96 to match Cell Ranger's default mismatch tolerance
+# 2) Cell Ranger only counts reads that overlap an exon by at least 50% (see Cell Ranger algorithm documentation), therefore --query_cov is set to 0.5 to ensure a minimum 50% alignment coverage
+# 3) --maxaccepts and --maxrejects are set to 0 to force vsearch to search the entire database for each query read and to report all matches (see vsearch manual)
 vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
   --id 0.96 \
   --query_cov 0.5 \
   --strand both \
   --maxaccepts 0 \
   --maxrejects 0 \
-  --userfields query+target+id+mism+gaps+tilo+tihi \
+  --userfields query+target+id+qcov+mism+gaps+qilo+qihi+tilo+tihi \
   --userout $OUTPUT_DIR/allelic_expression/hla_alignments.tsv
 
 

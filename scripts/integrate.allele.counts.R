@@ -66,21 +66,3 @@ base::colnames(hla_expression_df)[4] <- "personalized.count"
 # Replace all NA values with 0
 hla_expression_df[base::is.na(hla_expression_df)] <- 0
 
-
-
-
-
-
-
-
-#
-allele_counts <- allele_counts |>
-  tibble::rownames_to_column(var = "allele") |>
-  tidyr::pivot_longer(cols = -allele, names_to = "barcode", values_to = "allelic.expression") |>
-  dplyr::filter(barcode %in% hla_expression_df$barcode) |>
-  dplyr::mutate(gene = base::sub(pattern = "\\*.*$", replacement = "", x = allele))
-
-#
-hla_expression_df <- base::merge(x = hla_expression_df, y = allele_counts, by = base::c("barcode", "gene"), all.x = TRUE)
-#
-hla_expression_df <- hla_expression_df[base::order(hla_expression_df$barcode, hla_expression_df$gene) , base::c("barcode", "gene", "allele", "default.expression", "personalized.expression", "allelic.expression")]
