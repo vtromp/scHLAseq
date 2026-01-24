@@ -78,4 +78,4 @@ molecule_info$umi <- base::sapply(X = molecule_info$umi, FUN = function(umi) dec
 # Write filtered barcodes to a text file (one barcode per line)
 base::writeLines(text = barcodes[filtered_idx], con = glue::glue("{cellranger_output_dir}/outs/filtered_barcodes.txt"))
 # Write filtered molecule information to a TSV file
-utils::write.table(x = molecule_info, file = glue::glue("{cellranger_output_dir}/outs/molecule_info_hla_class_II.tsv"), header = TRUE, quote = FALSE, sep = "\t")
+utils::write.table(x = molecule_info, file = glue::glue("{cellranger_output_dir}/outs/molecule_info_hla_class_II.tsv"), quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
