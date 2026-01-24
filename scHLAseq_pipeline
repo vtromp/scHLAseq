@@ -52,13 +52,13 @@ while getopts ":f:r:o:t:h" opt; do
 done
 
 # Remove trailing slash (if present)
-FASTQS="${FASTQS%/}"
-REF_TRANSCRIPTOME="${REF_TRANSCRIPTOME%/}"
-OUTPUT_DIR="${OUTPUT_DIR%/}"
-TEMP_DIR="${TEMP_DIR%/}"
+FASTQS=${FASTQS%/}
+REF_TRANSCRIPTOME=${REF_TRANSCRIPTOME%/}
+OUTPUT_DIR=${OUTPUT_DIR%/}
+TEMP_DIR=${TEMP_DIR%/}
 
 # Append the FASTQ directory name to the output path to create a sample-specific output directory
-OUTPUT_DIR="$OUTPUT_DIR/$(basename "$FASTQS")_scHLAseq"
+OUTPUT_DIR=$OUTPUT_DIR/$(basename $FASTQS)_scHLAseq
 
 
 # -------------------------------
@@ -66,16 +66,70 @@ OUTPUT_DIR="$OUTPUT_DIR/$(basename "$FASTQS")_scHLAseq"
 # ------------------------------- 
 
 # Create output directory for cellranger count
-mkdir -p ""$OUTPUT_DIR"/cellranger_count/"
+mkdir -p $OUTPUT_DIR/cellranger_count/
 
 # Run the Cell Ranger count pipeline and write BAM files and all output results to 'cellranger_count' directory in output folder
 cellranger count --id cellranger_count \
-  --fastqs "$FASTQS" \
-  --transcriptome "$REF_TRANSCRIPTOME" \
+  --fastqs $FASTQS \
+  --transcriptome $REF_TRANSCRIPTOME \
   --create-bam true \
-  --output-dir ""$OUTPUT_DIR"/cellranger_count" \
-  --localcores "$(nproc)" \
-  --localmem "$(awk '/MemAvailable/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)"
+  --output-dir $OUTPUT_DIR/cellranger_count \
+  --localcores $(nproc) \
+  --localmem $(awk '/MemAvailable/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)
+
+#
+$SCRIPT_DIR/scripts/extract.HLAclassII.molecule.info.R -c $OUTPUT_DIR/cellranger_count
+
+
+# -------------------------------
+# 
+# ------------------------------- 
+
+#
+zcat $OUTPUT_DIR/cellranger_count/outs/filtered_feature_bc_matrix/barcodes.tsv.gz > $OUTPUT_DIR/filtered_barcodes.txt
+#
+awk '{print $1 "_" $2}' $OUTPUT_DIR/cellranger_count/outs/molecule_info_hla_class_II.tsv > $OUTPUT_DIR/barcodes_umis.txt
+
+#
+samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam \
+| awk '
+BEGIN {
+    while ((getline < "$OUTPUT_DIR/barcodes_umis.txt") > 0) keep[$1]=1
+}
+{
+    if ($0 ~ /^@/) { print; next }
+    cb=""; ub=""
+    for (i=12;i<=NF;i++) {
+        if ($i ~ /^CB:Z:/) cb=substr($i,6)
+        if ($i ~ /^UB:Z:/) ub=substr($i,6)
+    }
+    if (cb!="" && ub!="" && keep[cb "_" ub]) print
+}' \
+| samtools view -b -o $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_hla_class_II.bam
+#
+samtools index $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_hla_class_II.bam
+
+#
+samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk -v bcfile=$OUTPUT_DIR/filtered_barcodes.txt '
+BEGIN {
+    while ((getline < bcfile) > 0) keep[$1]=1
+}
+{
+    if ($0 ~ /^@/) { print; next }
+    if (and($2, 4) == 0) next
+    cb=""; ub=""
+    for (i=12; i<=NF; i++) {
+        if ($i ~ /^CB:Z:/) cb=substr($i,6)
+        else if ($i ~ /^UB:Z:/) ub=substr($i,6)
+    }
+    if (cb!="" && ub!="" && keep[cb]) print
+}' \
+| samtools view -b -o $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_unmapped.bam
+#
+samtools index $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_unmapped.bam
+
+#
+rm $OUTPUT_DIR/filtered_barcodes.txt $OUTPUT_DIR/barcodes_umis.txt
 
 
 # -------------------------------

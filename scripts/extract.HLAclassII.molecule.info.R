@@ -2,7 +2,8 @@
 
 # Define the command-line options for the script using optparse
 option_list <- list(
-  optparse::make_option(opt_str = base::c("-c", "--cellranger-out"), action = "store", type = "character", help = "", metavar = "DIR")
+  optparse::make_option(opt_str = base::c("-c", "--cellranger-out"), action = "store", type = "character", help = "", metavar = "DIR"),
+  optparse::make_option(opt_str = base::c("-o", "--output-file"), action = "store", type = "character", default = "molecule_info_hla_class_II.tsv", help = "", metavar = "TSV")
 )
 
 # Parse command-line arguments based on the defined options
@@ -10,6 +11,7 @@ opt <- optparse::parse_args(optparse::OptionParser(option_list = option_list))
 
 # Assign parsed arguments to internal variables for use in the script
 cellranger_output_dir <- opt$`cellranger-out`
+output_file <- opt$`output-file`
 
 # Remove trailing slash if present
 cellranger_output_dir <- base::sub(pattern = "/$", replacement = "", x = cellranger_output_dir)
@@ -75,7 +77,5 @@ decode_umi <- function(x, umi_length){
 # Decode all UMIs (assumes a fixed UMI length of 12)
 molecule_info$umi <- base::sapply(X = molecule_info$umi, FUN = function(umi) decode_umi(x = umi, umi_length = 12))
 
-# Write filtered barcodes to a text file (one barcode per line)
-base::writeLines(text = barcodes[filtered_idx], con = glue::glue("{cellranger_output_dir}/outs/filtered_barcodes.txt"))
 # Write filtered molecule information to a TSV file
-utils::write.table(x = molecule_info, file = glue::glue("{cellranger_output_dir}/outs/molecule_info_hla_class_II.tsv"), quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
+utils::write.table(x = molecule_info, file = output_file, quote = FALSE, sep = "\t", row.names = FALSE, col.names = TRUE)
