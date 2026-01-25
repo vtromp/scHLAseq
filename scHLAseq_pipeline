@@ -9,7 +9,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Empty variables to store user-provided paths
 FASTQS=""
-READ_LENGTH=150
 REF_TRANSCRIPTOME=""
 OUTPUT_DIR=""
 TEMP_DIR=""
@@ -24,7 +23,6 @@ usage() {
   echo "Usage: $0 -f <FASTQ_DIR> -l <READ_LENGTH> -r <REF_TRANSCRIPTOME_DIR> -o <OUTPUT_DIR> -t <TEMP_DIR>"
   echo
   echo "  -f FASTQ_DIR              Directory containing sequencing FASTQ files"
-  echo "  -l READ_LENGTH            Read length (default: 150)"
   echo "  -r REF_TRANSCRIPTOME_DIR  Path to CellRanger-compatible reference transcriptome"
   echo "  -o OUTPUT_DIR             Output directory"
   echo "  -t TEMP_DIR               Temporary directory"
@@ -41,7 +39,6 @@ usage() {
 while getopts ":f:r:o:t:h" opt; do
   case $opt in
     f) FASTQS="$OPTARG" ;;
-    l) READ_LENGTH="$OPTARG" ;;
     r) REF_TRANSCRIPTOME="$OPTARG" ;;
     o) OUTPUT_DIR="$OPTARG" ;;
     t) TEMP_DIR="$OPTARG" ;;
@@ -77,60 +74,104 @@ cellranger count --id cellranger_count \
   --localcores $(nproc) \
   --localmem $(awk '/MemAvailable/ {printf "%.0f\n", $2/1024/1024}' /proc/meminfo)
 
-#
-$SCRIPT_DIR/scripts/extract.HLAclassII.molecule.info.R -c $OUTPUT_DIR/cellranger_count
-
 
 # -------------------------------
-# 
+# Extract reads mapping to HLA class II genes and unmapped reads
 # ------------------------------- 
 
-#
+# Generates a TSV file containing, for each molecule assigned to an HLA class II gene, the corresponding cell barcode (CB) and UMI (UB) combination
+$SCRIPT_DIR/scripts/extract.HLAclassII.molecule.info.R -c $OUTPUT_DIR/cellranger_count -o $OUTPUT_DIR/hla_molecule_info.tsv
+
+# Extract the filtered cell barcodes from Cell Ranger output
 zcat $OUTPUT_DIR/cellranger_count/outs/filtered_feature_bc_matrix/barcodes.tsv.gz > $OUTPUT_DIR/filtered_barcodes.txt
-#
-awk '{print $1 "_" $2}' $OUTPUT_DIR/cellranger_count/outs/molecule_info_hla_class_II.tsv > $OUTPUT_DIR/barcodes_umis.txt
+# Create a CB_UB list from the previously generated HLA molecule info file
+awk '{print $1 "_" $2}' $OUTPUT_DIR/hla_molecule_info.tsv > $OUTPUT_DIR/barcode_umi_pairs.txt
 
-#
-samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam \
-| awk '
-BEGIN {
-    while ((getline < "$OUTPUT_DIR/barcodes_umis.txt") > 0) keep[$1]=1
-}
+# Filter the BAM to keep only reads whose CB-UB pair is in 'barcode_umi_pairs.txt'
+samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk -v keyfile=$OUTPUT_DIR/barcode_umi_pairs.txt '
+BEGIN { while ((getline < keyfile) > 0) keep[$1]=1 }
 {
+    # Pass through headers unchanged
     if ($0 ~ /^@/) { print; next }
-    cb=""; ub=""
-    for (i=12;i<=NF;i++) {
+    # For each read, parse CB and UB tags
+    for (i=12; i<=NF; i++)
         if ($i ~ /^CB:Z:/) cb=substr($i,6)
-        if ($i ~ /^UB:Z:/) ub=substr($i,6)
-    }
-    if (cb!="" && ub!="" && keep[cb "_" ub]) print
+        else if ($i ~ /^UB:Z:/) ub=substr($i,6)
+    # If both CB and UB exist and the pair is in the whitelist, keep the read
+    if (cb && ub && keep[cb "_" ub]) print
+    cb=ub=""
 }' \
-| samtools view -b -o $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_hla_class_II.bam
-#
-samtools index $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_hla_class_II.bam
+| samtools view -b -o $OUTPUT_DIR/hla_class_II_reads.bam
+# Index the filtered BAM file
+samtools index $OUTPUT_DIR/hla_class_II_reads.bam
 
-#
-samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk -v bcfile=$OUTPUT_DIR/filtered_barcodes.txt '
-BEGIN {
-    while ((getline < bcfile) > 0) keep[$1]=1
-}
+# Filter BAM for unmapped reads that have CB and UB tags and whose CB is in 'filtered_barcodes.txt'
+samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk -v keyfile=$OUTPUT_DIR/filtered_barcodes.txt '
+BEGIN { while ((getline < keyfile) > 0) keep[$1]=1 }
 {
+    # Pass through headers unchanged
     if ($0 ~ /^@/) { print; next }
+    # Keep only unmapped reads (FLAG 0x4)
     if (and($2, 4) == 0) next
     cb=""; ub=""
     for (i=12; i<=NF; i++) {
         if ($i ~ /^CB:Z:/) cb=substr($i,6)
         else if ($i ~ /^UB:Z:/) ub=substr($i,6)
     }
+    # If CB and UB exist and CB is in whitelist, keep the read
     if (cb!="" && ub!="" && keep[cb]) print
 }' \
-| samtools view -b -o $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_unmapped.bam
-#
-samtools index $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam_unmapped.bam
+| samtools view -b -o $OUTPUT_DIR/unmapped_reads.bam
+# Index the filtered BAM file
+samtools index $OUTPUT_DIR/unmapped_reads.bam
 
-#
-rm $OUTPUT_DIR/filtered_barcodes.txt $OUTPUT_DIR/barcodes_umis.txt
+# Remove the 'filtered_barcodes.txt' and 'barcodes_umis.txt' files
+rm $OUTPUT_DIR/filtered_barcodes.txt $OUTPUT_DIR/barcode_umi_pairs.txt
 
+# Convert HLA class II reads to FASTQ
+samtools fastq $OUTPUT_DIR/hla_class_II_reads.bam > $OUTPUT_DIR/extracted_reads.fastq
+# Append unmapped reads to the same FASTQ file
+samtools fastq $OUTPUT_DIR/unmapped_reads.bam >> $OUTPUT_DIR/extracted_reads.fastq
+
+# Write TSV header
+echo -e "read.id\tbarcode\tumi\tchr\tpos\tgene\tregion\talignment.flag" > $OUTPUT_DIR/extracted_reads.tsv
+
+# Extract read ID, cell barcode (CB), UMI (UB), genomic position, gene name (GN), region annotation (RE), and alignment flag (xf) from the HLA class II BAM file and append the results as a TSV-formatted table
+samtools view $OUTPUT_DIR/hla_class_II_reads.bam | \
+awk '{
+  read_id = $1
+  chr = $3
+  pos = $4
+  cb = ub = re = gn = xf = "NA"
+  for(i=12;i<=NF;i++){
+    if($i ~ /^CB:Z:/) { cb = substr($i, 6) }
+    if($i ~ /^UB:Z:/) { ub = substr($i, 6) }
+    if($i ~ /^GN:Z:/) { gn = substr($i, 6) }
+    if($i ~ /^RE:A:/) { re = substr($i ,6) }
+    if($i ~ /^xf:i:/) { xf = substr($i, 6) }
+  }
+  if(cb != "NA" && ub != "NA") {
+    print read_id"\t"cb"\t"ub"\t"chr"\t"pos"\t"gn"\t"re"\t"xf
+  }
+}' >> $OUTPUT_DIR/extracted_reads.tsv
+# Append the same metadata from the unmapped BAM file
+samtools view $OUTPUT_DIR/unmapped_reads.bam | \
+awk '{
+  read_id = $1
+  chr = $3
+  pos = $4
+  cb = ub = re = gn = xf = "NA"
+  for(i=12;i<=NF;i++){
+    if($i ~ /^CB:Z:/) { cb = substr($i, 6) }
+    if($i ~ /^UB:Z:/) { ub = substr($i, 6) }
+    if($i ~ /^GN:Z:/) { gn = substr($i, 6) }
+    if($i ~ /^RE:A:/) { re = substr($i ,6) }
+    if($i ~ /^xf:i:/) { xf = substr($i, 6) }
+  }
+  if(cb != "NA" && ub != "NA") {
+    print read_id"\t"cb"\t"ub"\t"chr"\t"pos"\t"gn"\t"re"\t"xf
+  }
+}' >> $OUTPUT_DIR/extracted_reads.tsv
 
 # -------------------------------
 # Run arcasHLA
@@ -139,26 +180,19 @@ rm $OUTPUT_DIR/filtered_barcodes.txt $OUTPUT_DIR/barcodes_umis.txt
 # Create output directory for arcasHLA genotype
 mkdir -p $OUTPUT_DIR/arcashla_genotype/
 
-# Extract HLA-related and unmapped reads from the Cell Ranger BAM file
-arcasHLA extract $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam \
-  --unmapped \
+# Run arcasHLA genotype on the extracted FASTQ reads, restricting genotyping to HLA class II genes
+arcasHLA genotype $OUTPUT_DIR/extracted_reads.fastq \
+  --genes DPA1,DPA2,DPB1,DPB2,DQA1,DQA2,DQB1,DQB2,DRA,DRB1,DRB2,DRB3,DRB4,DRB5,DRB6,DRB7,DRB8,DRB9 \
   --single \
-  --outdir $OUTPUT_DIR/arcashla_genotype/ \
-  --temp $TEMP_DIR \
-  --threads $(nproc)
-
-# Perform HLA genotyping using the extracted reads
-arcasHLA genotype $OUTPUT_DIR/arcashla_genotype/possorted_genome_bam.extracted.fq.gz \
-  --single \
-  --avg $READ_LENGTH \
+  --avg $(head -n 2 $OUTPUT_DIR/extracted_reads.fastq | tail -n 1 | awk '{print length($0)}') \
   --outdir $OUTPUT_DIR/arcashla_genotype/ \
   --temp $TEMP_DIR \
   --threads $(nproc)
 
 # Rename extracted_reads output files to remove the common prefix
-for file in $OUTPUT_DIR/arcashla_genotype/possorted_genome_bam.*; do
+for file in $OUTPUT_DIR/arcashla_genotype/extracted_reads.*; do
   base=$(basename $file)
-  newname=${base#possorted_genome_bam.}
+  newname=${base#extracted_reads.}
   mv $file $OUTPUT_DIR/arcashla_genotype/$newname
 done
 
