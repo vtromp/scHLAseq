@@ -59,8 +59,27 @@ OUTPUT_DIR=$OUTPUT_DIR/$(basename $FASTQS)_scHLAseq
 
 
 # -------------------------------
+# Initialize logging and timestamped info messages
+# ------------------------------- 
+
+# Function to print info messages to terminal with timestamp
+info() {
+  local msg="$1"
+   echo "$(date '+%Y-%m-%d %H:%M:%S') $msg"
+}
+
+# Redirect all stdout/stderr of commands to log file by default
+LOG_FILE=$OUTPUT_DIR/run.log
+mkdir -p $OUTPUT_DIR
+exec > >(tee -a $LOG_FILE) 2>&1
+
+
+# -------------------------------
 # Run cellranger count
 # ------------------------------- 
+
+# Return message with timestamp
+info "Running CellRanger count"
 
 # Create output directory for cellranger count
 mkdir -p $OUTPUT_DIR/cellranger_count/
@@ -79,13 +98,18 @@ cellranger count --id cellranger_count \
 # Extract reads mapping to HLA class II genes and unmapped reads
 # ------------------------------- 
 
+# Return message with timestamp
+info "Extracting reads mapping to HLA class II genes and unmapped reads"
+
 # Generates a TSV file containing, for each molecule assigned to an HLA class II gene, the corresponding cell barcode (CB) and UMI (UB) combination
-$SCRIPT_DIR/scripts/extract.HLAclassII.molecule.info.R -c $OUTPUT_DIR/cellranger_count -o $OUTPUT_DIR/hla_molecule_info.tsv
+$SCRIPT_DIR/scripts/extract.HLAclassII.molecule.info.R \
+  --cellranger-out $OUTPUT_DIR/cellranger_count/ \
+  --output-file $OUTPUT_DIR/hla_molecule_info_cellranger.tsv
 
 # Extract the filtered cell barcodes from Cell Ranger output
 zcat $OUTPUT_DIR/cellranger_count/outs/filtered_feature_bc_matrix/barcodes.tsv.gz > $OUTPUT_DIR/filtered_barcodes.txt
 # Create a CB_UB list from the previously generated HLA molecule info file
-awk '{print $1 "_" $2}' $OUTPUT_DIR/hla_molecule_info.tsv > $OUTPUT_DIR/barcode_umi_pairs.txt
+awk '{print $1 "_" $2}' $OUTPUT_DIR/hla_molecule_info_cellranger.tsv > $OUTPUT_DIR/barcode_umi_pairs.txt
 
 # Filter the BAM to keep only reads whose CB-UB pair is in 'barcode_umi_pairs.txt'
 samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk -v keyfile=$OUTPUT_DIR/barcode_umi_pairs.txt '
@@ -177,6 +201,9 @@ awk '{
 # Run arcasHLA
 # ------------------------------- 
 
+# Return message with timestamp
+info "Running arcasHLA to infer HLA genotype"
+
 # Create output directory for arcasHLA genotype
 mkdir -p $OUTPUT_DIR/arcashla_genotype/
 
@@ -199,79 +226,54 @@ done
 # Retrieve IPD-IMGT/HLA allele sequences for arcasHLA-identified class II alleles
 $SCRIPT_DIR/scripts/fetch.HLA.allele.seqs.R \
   -g $OUTPUT_DIR/arcashla_genotype/genotype.json \
-  -o $OUTPUT_DIR/arcashla_genotype/ \
-  --class-II-only
+  -o $OUTPUT_DIR/arcashla_genotype/ 
 
 
 # -------------------------------
-# Re-align reads from chromosome 6 and unmapped reads to allelic-specific HLA reference sequences 
+# Re-align extracted reads from chromosome 6 and unmapped reads to allelic-specific HLA reference sequences 
 # ------------------------------- 
 
-# Create output directory for allelic expression analysis
-mkdir -p $OUTPUT_DIR/allelic_expression/
-
-# Extract reads mapped to chromosome 6 and unmapped reads that contain valid cell barcode (CB) and UMI (UB) tags, retaining the SAM header
-samtools view -h $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam chr6 | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam
-samtools view -h -f 4 $OUTPUT_DIR/cellranger_count/outs/possorted_genome_bam.bam | awk '$0 ~ /^@/ || ($0 ~ /\tCB:Z:/ && $0 ~ /\tUB:Z:/)' > $OUTPUT_DIR/allelic_expression/unmapped_reads.sam
-# Convert SAM files to BAM and merge
-samtools view -b -o $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam
-samtools view -b -o $OUTPUT_DIR/allelic_expression/unmapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.sam
-samtools merge -o $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.bam
-# Remove intermediate SAM and BAM files to save disk space
-rm $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.sam $OUTPUT_DIR/allelic_expression/unmapped_reads.sam $OUTPUT_DIR/allelic_expression/chr6_mapped_reads.bam $OUTPUT_DIR/allelic_expression/unmapped_reads.bam
-
-# Convert merged BAM file to FASTQ for downstream allele-specific alignment
-samtools fastq $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq
-
-# Create a TSV file listing read ID, cell barcode, UMI, chromosome, and genomic position for all reads with valid CB and UB tags
-samtools view $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam | \
-awk '{
-  read_id=$1;
-  chr=$3;
-  pos=$4;
-  cb="NA";
-  ub="NA";
-  re="NA";
-  for(i=12;i<=NF;i++){
-    if($i ~ /^CB:Z:/) { cb=substr($i,6) }
-    if($i ~ /^UB:Z:/) { ub=substr($i,6) }
-    if($i ~ /^RE:A:/) { re=substr($i,6,1) }
-  }
-  if(cb != "NA" && ub != "NA") {
-    print read_id"\t"cb"\t"ub"\t"chr"\t"pos"\t"re
-  }
-}' > $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv
+# Return message with timestamp
+info "Re-aligning extracted reads to arcasHLA-imputed HLA class II alleles"
 
 # Align extracted reads against arcasHLA-derived HLA allele sequences
 # Note:
 # 1) STAR (used by Cell Ranger) has a default --outFilterMismatchNoverReadLmax = 0.04 (see STAR manual), meaning the maximum allowed mismatches per read pair is 4% of read length, therefore --id is set to 0.96 to match Cell Ranger's default mismatch tolerance
 # 2) Cell Ranger only counts reads that overlap an exon by at least 50% (see Cell Ranger algorithm documentation), therefore --query_cov is set to 0.5 to ensure a minimum 50% alignment coverage
 # 3) --maxaccepts and --maxrejects are set to 0 to force vsearch to search the entire database for each query read and to report all matches (see vsearch manual)
-vsearch --usearch_global $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
+vsearch --usearch_global $OUTPUT_DIR/extracted_reads.fastq --db $OUTPUT_DIR/arcashla_genotype/genotype.fasta \
   --id 0.96 \
   --query_cov 0.5 \
-  --strand both \
+  --strand plus \
   --maxaccepts 0 \
   --maxrejects 0 \
-  --userfields query+target+id+qcov+mism+gaps+qilo+qihi+tilo+tihi \
-  --userout $OUTPUT_DIR/allelic_expression/hla_alignments.tsv
+  --userfields query+target+id+qcov+alnlen+ids+mism+gaps+qilo+qihi+tilo+tihi \
+  --userout $OUTPUT_DIR/hla_alignments.tsv
 
 
 # -------------------------------
 # Construct allele count matrix
 # ------------------------------- 
 
+# Return message with timestamp
+info "Constructing allele count matrix"
+
 # Use read metadata and realigned reads to generate a sparse allele × cell barcode matrix, counting unique UMIs per (unique) allele-barcode combination
 $SCRIPT_DIR/scripts/calculate.allele.count.matrix.R \
-  --reads $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv \
-  --alignments $OUTPUT_DIR/allelic_expression/hla_alignments.tsv \
-  --gtf $REF_TRANSCRIPTOME/genes/genes.gtf.gz \
-  --output-dir $OUTPUT_DIR/allelic_expression/
-
-# Clean up intermediate alignment and read files
-rm $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.bam $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.fastq $OUTPUT_DIR/allelic_expression/chr6_and_unmapped_reads.tsv $OUTPUT_DIR/allelic_expression/hla_alignments.tsv
+  --reads $OUTPUT_DIR/extracted_reads.tsv \
+  --alignments $OUTPUT_DIR/hla_alignments.tsv \
+  --output-dir $OUTPUT_DIR
 
 
 # -------------------------------
 # Integrate allelic counts into Seurat object
 # ------------------------------- 
+
+# Return message with timestamp
+info "Integrating allelic counts into Cell Ranger filtered feature-barcode matrix and building Seurat object"
+
+$SCRIPT_DIR/integrate.allele.counts.R \
+  --cellranger-out $OUTPUT_DIR/cellranger_count/ \
+  --allele-count-matrix $OUTPUT_DIR/allele_count_matrix/ \
+  --project-id $(basename $FASTQS) \
+  --output-dir $OUTPUT_DIR

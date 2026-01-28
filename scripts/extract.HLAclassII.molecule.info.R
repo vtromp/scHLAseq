@@ -1,9 +1,17 @@
 #!/usr/bin/env Rscript
 
+# ------------------------------------------------------------------
+# This script reads the Cell Ranger molecule_info.h5 output file,
+# extracts per-molecule cell barcode, UMI, and gene information,
+# filters molecules to barcodes that passed cell filtering and to
+# HLA class II genes only, decodes 2-bit encoded UMIs, and writes
+# the resulting molecule-level information to a TSV file.
+# ------------------------------------------------------------------
+
 # Define the command-line options for the script using optparse
 option_list <- list(
-  optparse::make_option(opt_str = base::c("-c", "--cellranger-out"), action = "store", type = "character", help = "", metavar = "DIR"),
-  optparse::make_option(opt_str = base::c("-o", "--output-file"), action = "store", type = "character", default = "molecule_info_hla_class_II.tsv", help = "", metavar = "TSV")
+  optparse::make_option(opt_str = base::c("-c", "--cellranger-out"), action = "store", type = "character", help = "Path to the Cell Ranger output directory containing outs/molecule_info.h5", metavar = "DIR"),
+  optparse::make_option(opt_str = base::c("-o", "--output-file"), action = "store", type = "character", default = "molecule_info_hla_class_II.tsv", help = "Output TSV file with barcode, decoded UMI, and HLA class II gene assignment", metavar = "TSV")
 )
 
 # Parse command-line arguments based on the defined options

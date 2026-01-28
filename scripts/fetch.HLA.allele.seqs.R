@@ -1,9 +1,19 @@
 #!/usr/bin/env Rscript
 
+# ------------------------------------------------------------------
+# This script processes arcasHLA genotype JSON output, retrieves the
+# corresponding HLA allele sequences from the IPD-IMGT/HLA database,
+# and reconstructs full transcript sequences by concatenating UTR
+# and exon sequences.
+#
+# For alleles where only coding sequences are available, UTR sequences
+# are retrieved from the first allele of the same parent group.
+# ------------------------------------------------------------------
+
 # Define the command-line options for the script using optparse
 option_list <- list(
-  optparse::make_option(opt_str = base::c("-g", "--genotype-file"), action = "store", type = "character", help = "arcasHLA genotype JSON", metavar = "JSON"),
-  optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output (default: working directory)", metavar = "DIR"),
+  optparse::make_option(opt_str = base::c("-g", "--genotype-file"), action = "store", type = "character", help = "arcasHLA genotype JSON output file", metavar = "JSON"),
+  optparse::make_option(opt_str = base::c("-o", "--output-dir"), action = "store", type = "character", default = base::getwd(), help = "Directory for output FASTA file (default: working directory)", metavar = "DIR"),
   optparse::make_option(opt_str = "--class-I-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class I genes"),
   optparse::make_option(opt_str = "--class-II-only", action = "store_true", type = "logical", default = FALSE, help = "Include only HLA class II genes")
 )
