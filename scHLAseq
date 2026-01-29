@@ -3,6 +3,10 @@
 # Resolve the absolute path to the directory where this script is located, allowing helper scripts and resources to be referenced reliably regardless of the current working directory or how the script was invoked
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Make sure all scripts in the scripts directory are executable
+chmod +x $SCRIPT_DIR/scripts/*
+
+
 # -------------------------------
 # Initialize variables
 # -------------------------------
@@ -272,7 +276,7 @@ $SCRIPT_DIR/scripts/calculate.allele.count.matrix.R \
 # Return message with timestamp
 info "Integrating allelic counts into Cell Ranger filtered feature-barcode matrix and building Seurat object"
 
-$SCRIPT_DIR/integrate.allele.counts.R \
+$SCRIPT_DIR/scripts/integrate.allele.counts.R \
   --cellranger-out $OUTPUT_DIR/cellranger_count/ \
   --allele-count-matrix $OUTPUT_DIR/allele_count_matrix/ \
   --project-id $(basename $FASTQS) \
